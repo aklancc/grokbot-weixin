@@ -1,4 +1,4 @@
-# weixin-grokbot
+# grokbot-weixin
 
 Bridge WeChat (Weixin) to Grok Bot routines.
 
