@@ -17,7 +17,9 @@ type ResponsesApiResponse = {
     type?: string;
     content?: Array<{ type?: string; text?: string }>;
   }>;
-  error?: { message?: string };
+  status?: string;
+  incomplete_details?: { reason?: string };
+  error?: { message?: string; code?: string };
 };
 
 /** Generate a reply with either Chat Completions or the OpenAI Responses API. */
@@ -48,6 +50,7 @@ export async function replyWithAI(app: BridgeApp, event: InboundEvent): Promise<
     .slice(0, 12_000);
   messages.push({ role: "user", content: current || "用户发送了一条消息，请自然回应。" });
 
+  let stage = "build_request";
   try {
     const isResponses = aiApiProtocol === "responses";
     const endpoint = `${aiApiBase.replace(/\/+$/, "")}/${isResponses ? "responses" : "chat/completions"}`;
@@ -76,35 +79,70 @@ export async function replyWithAI(app: BridgeApp, event: InboundEvent): Promise<
           max_tokens: 1_200,
           stream: false,
         };
+
+    stage = "provider_fetch";
     const response = await appFetch(app)(endpoint, {
       method: "POST",
       headers,
       body: JSON.stringify(body),
     });
-    const data = (await response.json()) as ChatCompletionResponse & ResponsesApiResponse;
+
+    stage = "provider_read_response";
+    const responseText = await response.text();
+    let data: ChatCompletionResponse & ResponsesApiResponse;
+    try {
+      data = responseText ? JSON.parse(responseText) as ChatCompletionResponse & ResponsesApiResponse : {};
+    } catch {
+      throw new Error(`AI provider returned non-JSON response (HTTP ${response.status})`);
+    }
+
     if (!response.ok) {
       logWarn("ai_provider_rejected", {
         status: response.status,
         provider: new URL(aiApiBase).hostname,
+        code: data.error?.code ?? null,
         message: data.error?.message?.slice(0, 300) ?? "unknown",
       });
-      await sendBridgeText(app, { to: event.sender.id, text: "我暂时无法生成回复，请稍后再试。", ...(event.context_token ? { contextToken: event.context_token } : {}) });
+      stage = "provider_rejected_notice";
+      const notice = await sendBridgeText(app, {
+        to: event.sender.id,
+        text: "我暂时无法生成回复，请稍后再试。",
+        ...(event.context_token ? { contextToken: event.context_token } : {}),
+      });
+      if (!notice.ok) logWarn("ai_failure_notice_delivery_failed", { message_id: event.message_id, error: notice.error });
       return false;
     }
+
     const raw = isResponses
       ? extractResponsesText(data)
       : data.choices?.[0]?.message?.content;
     const answer = (typeof raw === "string" ? raw : Array.isArray(raw) ? raw.map((part) => part.text ?? "").join("") : "").trim();
-    if (!answer) throw new Error("AI provider returned an empty answer");
+    if (!answer) {
+      const detail = isResponses && data.status === "incomplete"
+        ? `AI provider returned an incomplete response: ${data.incomplete_details?.reason ?? "unspecified"}`
+        : "AI provider returned an empty answer";
+      throw new Error(detail);
+    }
+
+    stage = "wechat_delivery";
     const result = await sendBridgeText(app, {
       to: event.sender.id,
       text: answer.slice(0, 4_000),
       ...(event.context_token ? { contextToken: event.context_token } : {}),
     });
-    return result.ok;
+    if (!result.ok) {
+      logWarn("ai_reply_delivery_failed", { message_id: event.message_id, error: result.error });
+      return false;
+    }
+    return true;
   } catch (err) {
-    logWarn("ai_provider_failed", { message_id: event.message_id, error: publicError(err) });
-    await sendBridgeText(app, { to: event.sender.id, text: "刚才回复失败了，请稍后再发一次。", ...(event.context_token ? { contextToken: event.context_token } : {}) });
+    logWarn("ai_provider_failed", { message_id: event.message_id, stage, error: publicError(err) });
+    const notice = await sendBridgeText(app, {
+      to: event.sender.id,
+      text: "刚才回复失败了，请稍后再发一次。",
+      ...(event.context_token ? { contextToken: event.context_token } : {}),
+    });
+    if (!notice.ok) logWarn("ai_failure_notice_delivery_failed", { message_id: event.message_id, error: notice.error });
     return false;
   }
 }
