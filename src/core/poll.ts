@@ -30,6 +30,7 @@ import {
 import { sendBridgeText } from "./send.js";
 import type { GetUpdatesResp, WeixinMessage } from "./types.js";
 import { replyWithAI } from "./deepseek.js";
+import { fetchAvailableModels } from "./models.js";
 
 export interface PollStepOutcome {
   /** Delay before the next poll. The long poll itself already waited. */
@@ -205,6 +206,7 @@ async function handleMessage(
       logWarn("history_read_failed", { sender, error: publicError(err) });
     }
     const selectedProvider = (await app.storage.get(KEYS.aiProvider)) ?? "custom";
+    const selectedModel = await app.storage.get(KEYS.aiModel);
     const aiApp: BridgeApp =
       selectedProvider === "deepseek"
         ? {
@@ -216,7 +218,9 @@ async function handleMessage(
               aiModel: "deepseek-chat",
             },
           }
-        : app;
+        : selectedModel
+          ? { ...app, config: { ...app.config, aiModel: selectedModel } }
+          : app;
     const ok = await replyWithAI(aiApp, event);
     logInfo("inbound_replied", {
       sender,
@@ -236,34 +240,72 @@ async function handleMessage(
 }
 
 async function handleModelCommand(app: BridgeApp, event: import("./types.js").InboundEvent): Promise<boolean> {
-  const command = event.text.trim().toLowerCase();
-  if (command !== "/model" && !command.startsWith("/model ")) return false;
+  const raw = event.text.trim();
+  if (!/^\/model(?:\s|$)/i.test(raw)) return false;
 
-  const selection = command.slice("/model".length).trim();
+  const selection = raw.slice("/model".length).trim();
+  const normalized = selection.toLowerCase();
   const current = (await app.storage.get(KEYS.aiProvider)) ?? "custom";
+  const savedModel = await app.storage.get(KEYS.aiModel);
   let reply: string;
 
-  if (!selection || selection === "help") {
-    reply = [
-      "模型切换：",
-      "/model deepseek —— 切换到 DeepSeek",
-      "/model custom —— 切回 Cloudflare 中配置的自定义模型",
-      "/model —— 查看当前模型",
-      "",
-      `当前模式：${current === "deepseek" ? "DeepSeek（deepseek-chat）" : `自定义（${app.config.aiModel}）`}`,
-    ].join("\n");
-  } else if (selection === "deepseek") {
+  if (!selection || normalized === "help" || normalized === "list") {
+    const currentName = current === "deepseek" ? "DeepSeek 官方 API（deepseek-chat）" : `OpenDoor/自定义（${savedModel ?? app.config.aiModel}）`;
+    try {
+      const models = await fetchAvailableModels(app);
+      const shown = models.slice(0, 45);
+      const remaining = models.length - shown.length;
+      reply = [
+        `当前模式：${currentName}`,
+        "",
+        "OpenDoor 可用模型：",
+        ...shown.map((id) => `• ${id}`),
+        ...(remaining > 0 ? [`……另有 ${remaining} 个模型未显示`] : []),
+        "",
+        "切换方法：发送 /model 模型ID",
+        "/model deepseek —— 切换到 DeepSeek 官方 API",
+        "/model custom —— 恢复 Cloudflare 默认自定义模型",
+        "/model list —— 重新获取模型列表",
+      ].join("\n");
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "未知错误";
+      reply = [
+        `当前模式：${currentName}`,
+        "暂时无法读取 OpenDoor 模型列表。",
+        detail,
+        "",
+        "请确认 Cloudflare 已配置 AI_API_BASE=https://ai.opendoor.sbs/v1 和 AI_API_KEY。",
+        "/model deepseek —— 切换到 DeepSeek 官方 API",
+        "/model custom —— 恢复默认自定义模型",
+      ].join("\n");
+    }
+  } else if (normalized === "deepseek") {
     if (!app.config.deepseekApiKey.trim()) {
-      reply = "没有检测到原来的 DEEPSEEK_API_KEY。请先在 Cloudflare 中恢复这个 Secret，再发送 /model deepseek。";
+      reply = "没有检测到 DEEPSEEK_API_KEY。请先在 Cloudflare 中恢复这个 Secret，再发送 /model deepseek。";
     } else {
       await app.storage.set(KEYS.aiProvider, "deepseek");
-      reply = "已切换到 DeepSeek（deepseek-chat）。之后的普通消息将使用 DeepSeek。";
+      await app.storage.delete(KEYS.aiModel);
+      reply = "已切换到 DeepSeek 官方 API（deepseek-chat）。之后的普通消息将使用 DeepSeek。";
     }
-  } else if (selection === "custom") {
+  } else if (normalized === "custom") {
     await app.storage.delete(KEYS.aiProvider);
-    reply = `已切回自定义模型：${app.config.aiModel}。将使用 Cloudflare 中配置的 AI_API_BASE、AI_API_KEY 和 AI_MODEL。`;
+    await app.storage.delete(KEYS.aiModel);
+    reply = `已恢复 Cloudflare 默认自定义模型：${app.config.aiModel}。`;
   } else {
-    reply = "不认识这个模型选项。发送 /model help 查看用法。";
+    try {
+      const models = await fetchAvailableModels(app);
+      const model = models.find((id) => id === selection) ?? models.find((id) => id.toLowerCase() === normalized);
+      if (!model) {
+        reply = `没有在 OpenDoor 模型列表中找到：${selection}。发送 /model 查看可用模型。`;
+      } else {
+        await app.storage.set(KEYS.aiProvider, "custom");
+        await app.storage.set(KEYS.aiModel, model);
+        reply = `已切换到模型：${model}。之后的普通消息将通过 OpenDoor API 调用。`;
+      }
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "未知错误";
+      reply = `读取模型列表失败，无法验证模型名称。\n${detail}`;
+    }
   }
 
   await sendBridgeText(app, {

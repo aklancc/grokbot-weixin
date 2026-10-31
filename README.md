@@ -1,16 +1,18 @@
-# Weixin DeepSeek Bot
+# Weixin Multi-Model Bot
 
-个人微信 iLink Bot：通过微信私聊与 DeepSeek 对话。运行在 Cloudflare Workers + SQLite Durable Object，不需要 NN6000、VPS 或电脑常驻。
+个人微信 iLink Bot：通过微信私聊调用 OpenDoor 中转 API 的多种模型，并保留 DeepSeek 官方 API 作为备用。运行在 Cloudflare Workers + SQLite Durable Object，不需要 NN6000、VPS 或电脑常驻。
 
 ## 当前功能
 
 - 微信扫码登录 iLink Bot。
 - Cloudflare Durable Object Alarm 持续轮询微信私聊。
-- 将当前消息和近期对话历史发送到 DeepSeek Chat Completions API。
-- 将 DeepSeek 回复发回微信。
+- 将当前消息和近期对话历史发送到 OpenAI Chat Completions 兼容 API。
+- 通过 `/model` 动态读取自定义 API 的 `/models` 列表，并用 `/model <模型ID>` 切换模型。
+- `/model deepseek` 切换到 DeepSeek 官方 API；`/model custom` 恢复 Cloudflare 默认自定义模型。
+- 将所选模型的回复发回微信。
 - 只处理白名单中的私聊发送者；群聊和机器人自身消息会被忽略。
 - 对话历史默认最多 30 轮、约 12000 字、24 小时；发送 `/new` 或 `/reset` 清空历史。
-- 微信语音使用微信提供的转写文本。当前 DeepSeek 接入不会把图片作为视觉输入识别。
+- 微信语音使用微信提供的转写文本。当前文字模型接入不会把图片作为视觉输入识别。
 
 ## Cloudflare 部署（适合 iPhone Safari）
 
@@ -18,21 +20,24 @@
 2. 授权 GitHub 后选择仓库 `aklancc/grokbot-weixin`，分支必须选择 `deepseek-cloudflare`，不要选 `main`。
 3. 使用仓库中的 `wrangler.toml`。Worker 名称为 `wechat-ilink-deepseek`，Durable Object SQLite binding 和 migrations 已写在配置中。
 4. 若使用 Cloudflare Workers Builds，安装命令使用 `npm ci`，部署命令使用 `npx wrangler deploy`。确保部署日志显示 Durable Object migrations 已应用。
-5. 在 Worker 的 **Settings → Variables and Secrets** 中添加以下两个 **Secret**：
-   - `DEEPSEEK_API_KEY`：DeepSeek API Key。
-   - `BRIDGE_TOKEN`：一段自己生成的高强度随机密码，用于保护登录管理接口。
-6. 触发一次新部署，让 Secret 生效。
+5. 在 Worker 的 **Settings → Variables and Secrets** 中添加：
+   - **Variable** `AI_API_BASE`：`https://ai.opendoor.sbs/v1`。
+   - **Secret** `AI_API_KEY`：OpenDoor 的 API Key。
+   - **Variable** `AI_MODEL`：OpenDoor 账户中可用的默认模型 ID。
+   - **Secret** `DEEPSEEK_API_KEY`：DeepSeek 官方 API Key，作为备用；不使用官方 DeepSeek 时可不配置。
+   - **Secret** `BRIDGE_TOKEN`：一段自己生成的高强度随机密码，用于保护登录管理接口。
+6. 保存后触发一次新部署，让变量和 Secret 生效。
 7. 打开 `https://wechat-ilink-deepseek.<你的 workers.dev 子域>.workers.dev/login`，输入 `BRIDGE_TOKEN`，开始微信扫码登录。
 8. 在微信中扫码并确认。登录成功后，iLink 返回的扫码用户 ID 会被加入白名单。
-9. 给机器人发送一条私聊消息测试。成功时应收到 DeepSeek 回复。
+9. 给机器人发送一条私聊消息测试。成功时应收到所选模型的回复。
 
 ## 安全注意事项
 
-- 不要把 `DEEPSEEK_API_KEY` 或 `BRIDGE_TOKEN` 写入 GitHub、普通 Variables 或公开截图；必须使用 Cloudflare Secret。
+- 不要把 `AI_API_KEY`、`DEEPSEEK_API_KEY` 或 `BRIDGE_TOKEN` 写入 GitHub、普通 Variables 或公开截图；必须使用 Cloudflare Secret。
 - 本项目按个人账号使用设计。不会自动把任意第一个来信者加入白名单；若 iLink 登录响应没有提供扫码者 ID，机器人会保持不回复，避免陌生人抢先占用。
 - 只处理私聊，不处理群聊。
-- 如需检查状态，可访问 Worker 的 `/health`。健康信息只显示是否已登录、白名单数量及 DeepSeek 是否已配置，不显示密钥。
-- DeepSeek API 按实际输入和输出 Token 计费；Cloudflare 使用量受账号计划限制。
+- 如需检查状态，可访问 Worker 的 `/health`。健康信息只显示是否已登录、白名单数量及 API 密钥是否已配置，不显示密钥。
+- OpenDoor 和 DeepSeek 的价格、额度及模型可用性以各自平台账户为准；Cloudflare 使用量受账号计划限制。
 
 ## 本地检查
 
