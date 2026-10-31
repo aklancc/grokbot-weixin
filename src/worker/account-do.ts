@@ -36,6 +36,11 @@ export class AccountDurableObjectV2 extends DurableObject<Env> {
     return Boolean(this.env.DEEPSEEK_API_KEY?.trim());
   }
 
+  /** Safe diagnostic RPC: reports bridge-token presence only, never its value. */
+  async hasBridgeToken(): Promise<boolean> {
+    return Boolean(this.env.BRIDGE_TOKEN?.trim());
+  }
+
   /** Proxy the bridge HTTP API onto this account. */
   override async fetch(request: Request): Promise<Response> {
     return this.dispatch(request);
