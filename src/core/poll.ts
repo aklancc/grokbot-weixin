@@ -308,7 +308,7 @@ function defaultModel(app: BridgeApp, provider: AIProvider): string {
 }
 
 async function readProviderModel(app: BridgeApp, provider: AIProvider): Promise<string> {
-  const key = provider === "zhongdiwa" ? KEYS.aiModelZhongdiwa : KEYS.aiModel;
+  const key = provider === "deepseek" ? KEYS.aiModelDeepseek : provider === "zhongdiwa" ? KEYS.aiModelZhongdiwa : KEYS.aiModel;
   return (await app.storage.get(key)) ?? "";
 }
 
