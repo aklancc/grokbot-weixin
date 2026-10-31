@@ -8,6 +8,7 @@ export { AccountDurableObjectV2 };
 
 type AccountStub = DurableObjectStub & {
   handleHttp(request: Request): Promise<Response>;
+  hasDeepSeekKey(): Promise<boolean>;
 };
 
 /** Route every request to the single account Durable Object. */
@@ -16,6 +17,20 @@ export default {
     const url = new URL(request.url);
     const path = redactRequestPath(url.pathname);
     logInfo("request", { method: request.method, path });
+
+    // Safe diagnostic: expose only whether the binding is present, never its value.
+    if (request.method === "GET" && url.pathname === "/__envcheck") {
+      const stub = env.ACCOUNT.getByName("owner") as AccountStub;
+      const doHasKey = await stub.hasDeepSeekKey();
+      return new Response(JSON.stringify({
+        ok: true,
+        outer_worker_has_deepseek_key: Boolean(env.DEEPSEEK_API_KEY?.trim()),
+        durable_object_has_deepseek_key: doHasKey,
+      }), {
+        headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
+      });
+    }
+
     let body: Uint8Array | null;
     try {
       body = await bufferedAccountBody(request);
