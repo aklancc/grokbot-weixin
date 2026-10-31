@@ -113,7 +113,7 @@ describe("DeepSeek direct reply", () => {
 
   it("does not call the provider or send a message without an API key", async () => {
     const mock = mockFetch(() => ({ status: 200, body: "{}" }));
-    const app = makeApp(mock.fetchImpl, { deepseekApiKey: "" });
+    const app = makeApp(mock.fetchImpl, { aiApiKey: "" });
     expect(await replyWithDeepSeek(app, inbound())).toBe(false);
     expect(mock.calls).toHaveLength(0);
   });
