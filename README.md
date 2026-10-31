@@ -6,7 +6,9 @@
 
 - 微信扫码登录 iLink Bot。
 - Cloudflare Durable Object Alarm 持续轮询微信私聊。
-- 将当前消息和近期对话历史发送到 OpenAI Chat Completions 兼容 API。\n- 通过 `/model` 动态读取自定义 API 的 `/models` 列表，并用 `/model <模型ID>` 切换模型。\n- `/model deepseek` 切换到 DeepSeek 官方 API；`/model custom` 恢复 Cloudflare 默认自定义模型。
+- 将当前消息和近期对话历史发送到 OpenAI Chat Completions 兼容 API。
+- 通过 `/model` 动态读取自定义 API 的 `/models` 列表，并用 `/model <模型ID>` 切换模型。
+- `/model deepseek` 切换到 DeepSeek 官方 API；`/model custom` 恢复 Cloudflare 默认自定义模型。
 - 将 DeepSeek 回复发回微信。
 - 只处理白名单中的私聊发送者；群聊和机器人自身消息会被忽略。
 - 对话历史默认最多 30 轮、约 12000 字、24 小时；发送 `/new` 或 `/reset` 清空历史。
