@@ -29,23 +29,23 @@ export async function replyWithAI(app: BridgeApp, event: InboundEvent): Promise<
   const attachmentNotes = event.media
     .map((item) => {
       const detail = [item.kind, item.file_name, item.transcript].filter(Boolean).join("，");
-      return detail ? \`[收到附件：\${detail}]\` : \`[收到\${item.kind}附件]\`;
+      return detail ? `[收到附件：${detail}]` : `[收到${item.kind}附件]`;
     })
-    .join("\\n");
+    .join("\n");
   const quote = event.quote?.text || event.quote?.title || "";
-  const current = [event.text, attachmentNotes, quote ? \`[引用内容：\${quote}]\` : ""]
+  const current = [event.text, attachmentNotes, quote ? `[引用内容：${quote}]` : ""]
     .filter(Boolean)
-    .join("\\n")
+    .join("\n")
     .slice(0, 12_000);
   messages.push({ role: "user", content: current || "用户发送了一条消息，请自然回应。" });
 
   try {
-    const endpoint = \`\${aiApiBase.replace(/\\/+$/, "")}/chat/completions\`;
+    const endpoint = `${aiApiBase.replace(/\/+$/, "")}/chat/completions`;
     const response = await appFetch(app)(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: \`Bearer \${aiApiKey}\`,
+        Authorization: `Bearer ${aiApiKey}`,
       },
       body: JSON.stringify({
         model: aiModel,
