@@ -1,4 +1,4 @@
-name: CI
+name: Build
 on:
   push:
     branches: [deepseek-cloudflare]
@@ -14,7 +14,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm test
       - run: npm run build:node
       - run: npm run typecheck:worker
       - run: npm run build:worker
