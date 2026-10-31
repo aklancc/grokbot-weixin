@@ -93,7 +93,7 @@ export type EnvMap = Record<string, string | undefined>;
 /** Build config from environment variables. Invalid numeric values fall back to defaults. */
 export function configFromEnv(env: EnvMap): BridgeConfig {
   const channelVersion = env.ILINK_CHANNEL_VERSION?.trim() || VERSION;
-  const fallbackAgent = \`GrokBotWeixin/\${channelVersion}\`;
+  const fallbackAgent = `GrokBotWeixin/${channelVersion}`;
   const route = env.ILINK_ROUTE_TAG?.trim();
   const schemeRaw = env.GROK_WEBHOOK_SCHEME;
   const mediaMaxBytes = intEnv(
