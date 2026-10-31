@@ -41,6 +41,7 @@ export interface BridgeConfig {
   routeTag?: string;
   allowFrom: string[];
   pinFirstSender: boolean;
+  deepseekApiKey: string;
   webhookUrl: string;
   webhookKey: string;
   webhookHeader: string;
