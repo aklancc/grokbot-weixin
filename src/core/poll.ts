@@ -313,7 +313,7 @@ async function readProviderModel(app: BridgeApp, provider: AIProvider): Promise<
 }
 
 async function writeProviderModel(app: BridgeApp, provider: AIProvider, model: string): Promise<void> {
-  const key = provider === "zhongdiwa" ? KEYS.aiModelZhongdiwa : KEYS.aiModel;
+  const key = provider === "deepseek" ? KEYS.aiModelDeepseek : provider === "zhongdiwa" ? KEYS.aiModelZhongdiwa : KEYS.aiModel;
   await app.storage.set(key, model);
 }
 
