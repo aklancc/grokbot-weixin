@@ -84,7 +84,7 @@ export async function healthReport(app: BridgeApp): Promise<Record<string, unkno
 
 async function loginPage(request: Request, app: BridgeApp): Promise<Response> {
   if (!(await isAuthorized(request, app.config.bridgeToken))) {
-    return html(renderTokenForm(), 200, false);
+    const sessionWasSet = new URL(request.url).searchParams.get("session") === "ok";\n    return html(renderTokenForm(sessionWasSet ? "密码已验证，但浏览器没有保留登录状态。请允许此网站使用 Cookie 后重试。" : ""), 200, false);
   }
   return html(renderLoginApp(), 200, new URL(request.url).protocol === "https:");
 }
@@ -92,13 +92,13 @@ async function loginPage(request: Request, app: BridgeApp): Promise<Response> {
 async function loginSession(request: Request, app: BridgeApp): Promise<Response> {
   const proof = await readProof(request);
   if (!proof || !(await timingSafeEqual(proof, app.config.bridgeToken)) || !app.config.bridgeToken) {
-    return html(renderTokenForm(), 401, false);
+    return html(renderTokenForm("令牌不正确，或服务器收到的令牌为空。请核对 Cloudflare 中的 BRIDGE_TOKEN。"), 401, false);
   }
   const secure = new URL(request.url).protocol === "https:";
   return new Response(null, {
     status: 302,
     headers: {
-      Location: "/login",
+      Location: "/login?session=ok",
       "Set-Cookie": sessionCookie(app.config.bridgeToken, secure),
       "Cache-Control": "no-store",
       "Referrer-Policy": "no-referrer",
