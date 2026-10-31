@@ -5,6 +5,7 @@ export interface Env {
   ACCOUNT: DurableObjectNamespace;
   BRIDGE_TOKEN?: string;
   BRIDGE_PUBLIC_URL?: string;
+  DEEPSEEK_API_KEY?: string;
   GROK_WEBHOOK_URL?: string;
   GROK_WEBHOOK_KEY?: string;
   GROK_WEBHOOK_HEADER?: string;
