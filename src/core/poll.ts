@@ -29,7 +29,7 @@ import {
 } from "./state.js";
 import { sendBridgeText } from "./send.js";
 import type { GetUpdatesResp, WeixinMessage } from "./types.js";
-import { replyWithDeepSeek } from "./deepseek.js";
+import { replyWithAI } from "./deepseek.js";
 
 export interface PollStepOutcome {
   /** Delay before the next poll. The long poll itself already waited. */
@@ -197,7 +197,7 @@ async function handleMessage(
       event.history = [];
       logWarn("history_read_failed", { sender, error: publicError(err) });
     }
-    const ok = await replyWithDeepSeek(app, event);
+    const ok = await replyWithAI(app, event);
     logInfo("inbound_replied", {
       sender,
       message_id: event.message_id,
