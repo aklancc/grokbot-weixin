@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { KEYS } from "../src/core/keys.js";
 import { runPollStep } from "../src/core/poll.js";
+import { postWebhook } from "../src/core/webhook.js";
 import { readAllowlist, readContextTokens, readDedupe, writeSession } from "../src/core/state.js";
 import { makeApp, mockFetch, type CapturedRequest } from "./support.js";
 import type { BridgeApp } from "../src/core/app.js";
