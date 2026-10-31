@@ -1,6 +1,6 @@
 # Weixin Multi-Model Bot
 
-个人微信 iLink Bot：通过微信私聊调用 OpenDoor 中转 API 的多种模型，并保留 DeepSeek 官方 API 作为备用。运行在 Cloudflare Workers + SQLite Durable Object，不需要 NN6000、VPS 或电脑常驻。
+个人微信 iLink Bot：通过微信私聊调用 OpenDoor 中转 API 的多种模型，并保留 DeepSeek 官方 API 作为备用。运行在 Cloudflare Workers + SQLite Durable Object，不需要 NAS、VPS 或电脑常驻。
 
 ## 当前功能
 
