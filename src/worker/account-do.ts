@@ -32,8 +32,8 @@ export class AccountDurableObjectV2 extends DurableObject<Env> {
   }
 
   /** Safe diagnostic RPC: reports presence only, never returns the secret. */
-  async hasDeepSeekKey(): Promise<boolean> {
-    return Boolean(this.env.DEEPSEEK_API_KEY?.trim());
+  async hasAIKey(): Promise<boolean> {
+    return Boolean((this.env.AI_API_KEY ?? this.env.DEEPSEEK_API_KEY)?.trim());
   }
 
   /** Safe diagnostic RPC: reports bridge-token presence only, never its value. */

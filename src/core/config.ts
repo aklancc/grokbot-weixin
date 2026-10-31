@@ -41,6 +41,11 @@ export interface BridgeConfig {
   routeTag?: string;
   allowFrom: string[];
   pinFirstSender: boolean;
+  /** OpenAI Chat Completions-compatible endpoint base, without /chat/completions. */
+  aiApiBase: string;
+  aiApiKey: string;
+  aiModel: string;
+  /** Legacy field retained for existing diagnostics and deployments. */
   deepseekApiKey: string;
   webhookUrl: string;
   webhookKey: string;
@@ -88,7 +93,7 @@ export type EnvMap = Record<string, string | undefined>;
 /** Build config from environment variables. Invalid numeric values fall back to defaults. */
 export function configFromEnv(env: EnvMap): BridgeConfig {
   const channelVersion = env.ILINK_CHANNEL_VERSION?.trim() || VERSION;
-  const fallbackAgent = `GrokBotWeixin/${channelVersion}`;
+  const fallbackAgent = \`GrokBotWeixin/\${channelVersion}\`;
   const route = env.ILINK_ROUTE_TAG?.trim();
   const schemeRaw = env.GROK_WEBHOOK_SCHEME;
   const mediaMaxBytes = intEnv(
@@ -101,6 +106,7 @@ export function configFromEnv(env: EnvMap): BridgeConfig {
     mediaMaxBytes,
     intEnv(env.MEDIA_MAX_TOTAL_BYTES, DEFAULT_MEDIA_TOTAL_BYTES, MIN_MEDIA_MAX_BYTES, MAX_MEDIA_TOTAL_BYTES),
   );
+  const legacyKey = env.DEEPSEEK_API_KEY ?? "";
   return {
     ilinkApiBase: stripSlash(env.ILINK_API_BASE?.trim() || DEFAULT_API_BASE),
     ilinkCdnBase: stripSlash(env.ILINK_CDN_BASE?.trim() || DEFAULT_CDN_BASE),
@@ -112,7 +118,10 @@ export function configFromEnv(env: EnvMap): BridgeConfig {
     ...(route && /^[A-Za-z0-9_.:-]{1,64}$/.test(route) ? { routeTag: route } : {}),
     allowFrom: splitList(env.WEIXIN_ALLOW_FROM),
     pinFirstSender: boolEnv(env.WEIXIN_PIN_FIRST_SENDER, true),
-    deepseekApiKey: env.DEEPSEEK_API_KEY ?? "",
+    aiApiBase: stripSlash(env.AI_API_BASE?.trim() || "https://api.deepseek.com"),
+    aiApiKey: env.AI_API_KEY ?? legacyKey,
+    aiModel: env.AI_MODEL?.trim() || "deepseek-chat",
+    deepseekApiKey: legacyKey,
     webhookUrl: env.GROK_WEBHOOK_URL?.trim() ?? "",
     webhookKey: env.GROK_WEBHOOK_KEY ?? "",
     webhookHeader: env.GROK_WEBHOOK_HEADER?.trim() || "Authorization",

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { replyWithDeepSeek } from "../src/core/deepseek.js";
+import { replyWithAI } from "../src/core/deepseek.js";
 import { writeAllowlist, writeSession } from "../src/core/state.js";
 import type { InboundEvent } from "../src/core/types.js";
 import { makeApp, mockFetch } from "./support.js";
@@ -71,7 +71,7 @@ describe("DeepSeek direct reply", () => {
     });
     await writeAllowlist(app.storage, ["owner@im.wechat"]);
 
-    expect(await replyWithDeepSeek(app, inbound())).toBe(true);
+    expect(await replyWithAI(app, inbound())).toBe(true);
     const ai = mock.calls.find((call) => call.url.hostname === "api.deepseek.com");
     expect(ai?.headers.get("authorization")).toBe("Bearer deepseek-test-key");
     const payload = JSON.parse(ai?.body ?? "{}") as {
@@ -87,9 +87,33 @@ describe("DeepSeek direct reply", () => {
     expect(sent?.body).toContain("ctx-1");
   });
 
+  it("uses the configured compatible endpoint and model", async () => {
+    const mock = mockFetch((request) => {
+      if (request.url.hostname === "ai.opendoor.sbs") {
+        return { status: 200, body: JSON.stringify({ choices: [{ message: { content: "测试回复" } }] }) };
+      }
+      if (request.url.pathname === "/ilink/bot/sendmessage") {
+        return { status: 200, body: JSON.stringify({ ret: 0, message_id: "out-2" }) };
+      }
+      return { status: 404, body: "" };
+    });
+    const app = makeApp(mock.fetchImpl, {
+      aiApiBase: "https://ai.opendoor.sbs/v1",
+      aiApiKey: "demo-token",
+      aiModel: "claude-fable-5",
+    });
+    await writeSession(app.storage, { botToken: "bot-secret", accountId: "bot@im.wechat", savedAt: 1 });
+    await writeAllowlist(app.storage, ["owner@im.wechat"]);
+    expect(await replyWithAI(app, inbound())).toBe(true);
+    const call = mock.calls.find((item) => item.url.hostname === "ai.opendoor.sbs");
+    expect(call?.url.pathname).toBe("/v1/chat/completions");
+    expect(call?.headers.get("authorization")).toBe("Bearer demo-token");
+    expect(JSON.parse(call?.body ?? "{}").model).toBe("claude-fable-5");
+  });
+
   it("does not call the provider or send a message without an API key", async () => {
     const mock = mockFetch(() => ({ status: 200, body: "{}" }));
-    const app = makeApp(mock.fetchImpl, { deepseekApiKey: "" });
+    const app = makeApp(mock.fetchImpl, { aiApiKey: "" });
     expect(await replyWithDeepSeek(app, inbound())).toBe(false);
     expect(mock.calls).toHaveLength(0);
   });
