@@ -251,7 +251,7 @@ async function handleModelCommand(app: BridgeApp, event: import("./types.js").In
       "/model —— 查看当前模型",
       "",
       `当前模式：${current === "deepseek" ? "DeepSeek（deepseek-chat）" : `自定义（${app.config.aiModel}）`}`,
-    ].join("\\n");
+    ].join("\n");
   } else if (selection === "deepseek") {
     if (!app.config.deepseekApiKey.trim()) {
       reply = "没有检测到原来的 DEEPSEEK_API_KEY。请先在 Cloudflare 中恢复这个 Secret，再发送 /model deepseek。";
