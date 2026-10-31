@@ -100,13 +100,17 @@ async function loginSession(request: Request, app: BridgeApp): Promise<Response>
     return html(renderTokenForm("令牌不正确，或服务器收到的令牌为空。请核对 Cloudflare 中的 BRIDGE_TOKEN。"), 401, false);
   }
   const secure = new URL(request.url).protocol === "https:";
-  return new Response(null, {
-    status: 302,
+  // Return the authenticated page in the same response that sets the cookie.
+  // This avoids relying on Safari to persist a cookie across a POST redirect.
+  return new Response(renderLoginApp(), {
+    status: 200,
     headers: {
-      Location: "/login?session=ok",
+      "Content-Type": "text/html; charset=utf-8",
       "Set-Cookie": sessionCookie(app.config.bridgeToken, secure),
       "Cache-Control": "no-store",
       "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff",
+      ...(secure ? { "Strict-Transport-Security": "max-age=31536000" } : {}),
     },
   });
 }
