@@ -33,6 +33,9 @@ SEND_TYPING = "true"
 LONG_POLL_TIMEOUT_MS = "35000"
 WEBHOOK_MAX_ATTEMPTS = "4"
 RATE_LIMIT_SEND_PER_MINUTE = "30"
+ZHONGDIWA_API_BASE = "https://www.zhongdiwa.com/v1"
+ZHONGDIWA_MODEL = "gpt-5.5"
+ZHONGDIWA_ACTOR_AUTHORIZATION = "local-image-extension"
 
 [[durable_objects.bindings]]
 name = "ACCOUNT"

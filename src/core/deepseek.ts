@@ -11,9 +11,18 @@ type ChatCompletionResponse = {
   error?: { message?: string };
 };
 
-/** Generate a reply with any OpenAI Chat Completions-compatible provider. */
+type ResponsesApiResponse = {
+  output_text?: string;
+  output?: Array<{
+    type?: string;
+    content?: Array<{ type?: string; text?: string }>;
+  }>;
+  error?: { message?: string };
+};
+
+/** Generate a reply with either Chat Completions or the OpenAI Responses API. */
 export async function replyWithAI(app: BridgeApp, event: InboundEvent): Promise<boolean> {
-  const { aiApiBase, aiApiKey, aiModel } = app.config;
+  const { aiApiBase, aiApiKey, aiModel, aiApiProtocol } = app.config;
   if (!aiApiKey || !aiApiBase || !aiModel) {
     logWarn("ai_not_configured", { message_id: event.message_id });
     return false;
@@ -40,22 +49,39 @@ export async function replyWithAI(app: BridgeApp, event: InboundEvent): Promise<
   messages.push({ role: "user", content: current || "用户发送了一条消息，请自然回应。" });
 
   try {
-    const endpoint = `${aiApiBase.replace(/\/+$/, "")}/chat/completions`;
+    const isResponses = aiApiProtocol === "responses";
+    const endpoint = `${aiApiBase.replace(/\/+$/, "")}/${isResponses ? "responses" : "chat/completions"}`;
+    const headers = new Headers({
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${aiApiKey}`,
+    });
+    if (isResponses && app.config.zhongdiwaActorAuthorization) {
+      headers.set("x-openai-actor-authorization", app.config.zhongdiwaActorAuthorization);
+    }
+    const body = isResponses
+      ? {
+          model: aiModel,
+          instructions: SYSTEM_PROMPT,
+          input: messages.slice(1).map((message) => ({
+            role: message.role,
+            content: [{ type: "input_text", text: message.content }],
+          })),
+          max_output_tokens: 1_200,
+          store: false,
+        }
+      : {
+          model: aiModel,
+          messages,
+          temperature: 0.7,
+          max_tokens: 1_200,
+          stream: false,
+        };
     const response = await appFetch(app)(endpoint, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${aiApiKey}`,
-      },
-      body: JSON.stringify({
-        model: aiModel,
-        messages,
-        temperature: 0.7,
-        max_tokens: 1_200,
-        stream: false,
-      }),
+      headers,
+      body: JSON.stringify(body),
     });
-    const data = (await response.json()) as ChatCompletionResponse;
+    const data = (await response.json()) as ChatCompletionResponse & ResponsesApiResponse;
     if (!response.ok) {
       logWarn("ai_provider_rejected", {
         status: response.status,
@@ -65,7 +91,9 @@ export async function replyWithAI(app: BridgeApp, event: InboundEvent): Promise<
       await sendBridgeText(app, { to: event.sender.id, text: "我暂时无法生成回复，请稍后再试。", ...(event.context_token ? { contextToken: event.context_token } : {}) });
       return false;
     }
-    const raw = data.choices?.[0]?.message?.content;
+    const raw = isResponses
+      ? extractResponsesText(data)
+      : data.choices?.[0]?.message?.content;
     const answer = (typeof raw === "string" ? raw : Array.isArray(raw) ? raw.map((part) => part.text ?? "").join("") : "").trim();
     if (!answer) throw new Error("AI provider returned an empty answer");
     const result = await sendBridgeText(app, {
@@ -79,6 +107,18 @@ export async function replyWithAI(app: BridgeApp, event: InboundEvent): Promise<
     await sendBridgeText(app, { to: event.sender.id, text: "刚才回复失败了，请稍后再发一次。", ...(event.context_token ? { contextToken: event.context_token } : {}) });
     return false;
   }
+}
+
+function extractResponsesText(data: ResponsesApiResponse): string {
+  if (typeof data.output_text === "string" && data.output_text.trim()) return data.output_text;
+  const chunks: string[] = [];
+  for (const item of data.output ?? []) {
+    if (item.type !== "message") continue;
+    for (const part of item.content ?? []) {
+      if ((part.type === "output_text" || part.type === "text") && typeof part.text === "string") chunks.push(part.text);
+    }
+  }
+  return chunks.join("\n");
 }
 
 /** Backwards-compatible export for integrations that used the old function name. */

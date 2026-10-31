@@ -15,4 +15,6 @@ export const KEYS = {
   historyViews: "history_views",
   aiProvider: "ai_provider",
   aiModel: "ai_model",
+  aiModelDeepseek: "ai_model_deepseek",
+  aiModelZhongdiwa: "ai_model_zhongdiwa",
 } as const;

@@ -45,6 +45,13 @@ export interface BridgeConfig {
   aiApiBase: string;
   aiApiKey: string;
   aiModel: string;
+  /** Selected provider protocol. */
+  aiApiProtocol: "chat_completions" | "responses";
+  /** Zhongdiwa Responses API credentials. */
+  zhongdiwaApiBase: string;
+  zhongdiwaApiKey: string;
+  zhongdiwaModel: string;
+  zhongdiwaActorAuthorization: string;
   /** Legacy field retained for existing diagnostics and deployments. */
   deepseekApiKey: string;
   webhookUrl: string;
@@ -121,6 +128,11 @@ export function configFromEnv(env: EnvMap): BridgeConfig {
     aiApiBase: stripSlash(env.AI_API_BASE?.trim() || "https://api.deepseek.com"),
     aiApiKey: env.AI_API_KEY ?? legacyKey,
     aiModel: env.AI_MODEL?.trim() || "deepseek-chat",
+    aiApiProtocol: "chat_completions",
+    zhongdiwaApiBase: stripSlash(env.ZHONGDIWA_API_BASE?.trim() || "https://www.zhongdiwa.com/v1"),
+    zhongdiwaApiKey: env.ZHONGDIWA_API_KEY ?? "",
+    zhongdiwaModel: env.ZHONGDIWA_MODEL?.trim() || "gpt-5.5",
+    zhongdiwaActorAuthorization: env.ZHONGDIWA_ACTOR_AUTHORIZATION?.trim() || "local-image-extension",
     deepseekApiKey: legacyKey,
     webhookUrl: env.GROK_WEBHOOK_URL?.trim() ?? "",
     webhookKey: env.GROK_WEBHOOK_KEY ?? "",

@@ -1,6 +1,6 @@
 import { configFromEnv, seedFromEnv, type AccountSeed, type BridgeConfig, type EnvMap } from "../core/config.js";
 
-/** Worker bindings. Secrets are set with \`wrangler secret put\` and are optional at type level. */
+/** Worker bindings. Secrets are set with `wrangler secret put` and are optional at type level. */
 export interface Env {
   ACCOUNT: DurableObjectNamespace;
   BRIDGE_TOKEN?: string;
@@ -9,6 +9,10 @@ export interface Env {
   AI_API_BASE?: string;
   AI_API_KEY?: string;
   AI_MODEL?: string;
+  ZHONGDIWA_API_BASE?: string;
+  ZHONGDIWA_API_KEY?: string;
+  ZHONGDIWA_MODEL?: string;
+  ZHONGDIWA_ACTOR_AUTHORIZATION?: string;
   GROK_WEBHOOK_URL?: string;
   GROK_WEBHOOK_KEY?: string;
   GROK_WEBHOOK_HEADER?: string;
@@ -50,6 +54,10 @@ export function workerEnvRecord(env: Env): EnvMap {
     AI_API_BASE: env.AI_API_BASE,
     AI_API_KEY: env.AI_API_KEY,
     AI_MODEL: env.AI_MODEL,
+    ZHONGDIWA_API_BASE: env.ZHONGDIWA_API_BASE,
+    ZHONGDIWA_API_KEY: env.ZHONGDIWA_API_KEY,
+    ZHONGDIWA_MODEL: env.ZHONGDIWA_MODEL,
+    ZHONGDIWA_ACTOR_AUTHORIZATION: env.ZHONGDIWA_ACTOR_AUTHORIZATION,
     GROK_WEBHOOK_URL: env.GROK_WEBHOOK_URL,
     GROK_WEBHOOK_KEY: env.GROK_WEBHOOK_KEY,
     GROK_WEBHOOK_HEADER: env.GROK_WEBHOOK_HEADER,
