@@ -1,8 +1,8 @@
-# grokbot-weixin
+# Weixin DeepSeek Bot
 
-Bridge one WeChat (Weixin) direct-message account to a [Grok Bot](https://grok.com) routine.
+A personal WeChat (Weixin) direct-message bot powered by DeepSeek, running on Cloudflare Workers with a SQLite Durable Object.
 
-A single always-on process logs in through the Weixin iLink Bot API, long-polls inbound messages, POSTs each direct message to a Grok Bot webhook routine, and sends the routine's text reply back to WeChat. The same TypeScript core runs on Cloudflare Workers or on Node.js 22.
+The Worker logs in through the Weixin iLink Bot API, long-polls inbound messages, sends the conversation context to DeepSeek, and delivers the answer back to the allowlisted WeChat account. No NN6000, VPS, or always-on computer is required.
 
 The protocol follows Tencent's official OpenClaw channel plugin, [openclaw-weixin](https://github.com/Tencent/openclaw-weixin) (MIT). This repository is a standalone reimplementation. It does not import or run the OpenClaw runtime. The wire format was checked against that project's `docs/protocol.md`, `src/api/api.ts`, `src/api/types.ts`, `src/auth/login-qr.ts`, and the monitor and send paths (package 2.4.10 at the time of writing). `src/core/json.ts` uses the same uint64-quoting approach as upstream so `message_id` values above `2^53-1` stay exact. Thank you to the openclaw-weixin authors.
 
@@ -11,16 +11,15 @@ sequenceDiagram
   participant WeChat
   participant iLink as iLink Bot API
   participant CDN as iLink CDN
-  participant Bridge as grokbot-weixin
-  participant Routine as Grok Bot routine
+  participant Bridge as Cloudflare Worker
+  participant AI as DeepSeek API
   WeChat->>iLink: Owner sends a DM
   iLink->>Bridge: POST /ilink/bot/getupdates
   Bridge->>CDN: GET encrypted media
   Bridge->>Bridge: AES-128-ECB decrypt, store briefly
-  Bridge->>Routine: POST webhook event (Bearer key)
-  Routine->>Bridge: GET /media/:id (BRIDGE_TOKEN)
-  Routine->>Routine: Read the event and the file
-  Routine->>Bridge: POST /send (BRIDGE_TOKEN)
+  Bridge->>AI: POST chat/completions (DEEPSEEK_API_KEY)
+  AI->>Bridge: Generated answer
+  Bridge->>iLink: POST /ilink/bot/sendmessage
   Bridge->>iLink: POST /ilink/bot/sendmessage
   iLink->>WeChat: Text reply
 ```
@@ -30,7 +29,7 @@ sequenceDiagram
 - QR login (`get_bot_qrcode`, `get_qrcode_status`), including redirect hosts and the verify-code step.
 - One `getupdates` long poll at a time, with a persisted cursor and a 200-id dedupe ring.
 - Text replies through `sendmessage`, using the latest stored `context_token` for that peer.
-- Optional typing indicator (`getconfig` + `sendtyping`) after a webhook is accepted.
+- Direct DeepSeek chat-completion requests; conversation history is included in each request.
 - A sender allowlist. The first WeChat account that scans the QR, or the first inbound sender when that id is absent, can be pinned. Unknown senders are logged by id and dropped.
 - `POST /send` protected by a bearer token (SHA-256 then constant-time compare) and a sliding one-minute rate limit.
 - Inbound images, voice, files, and video. The bridge downloads the iLink CDN object, decrypts it with AES-128-ECB and PKCS#7 (the same transform as openclaw-weixin), and keeps the plaintext until `MEDIA_TTL_MS`. The webhook event carries `GET /media/:id`, the mime type, and the size. That GET uses the same bearer token as `/send`.
@@ -63,7 +62,7 @@ Copy `.env.example` to `.env` for the Node runner. On Cloudflare, non-secrets ca
 | `ILINK_BOT_TYPE` | `3` | Query value on `get_bot_qrcode`. |
 | `ILINK_APP_ID` | `bot` | `iLink-App-Id`. |
 | `ILINK_CHANNEL_VERSION` | `0.1.0` | Encoded into `iLink-App-ClientVersion` as `major<<16 \| minor<<8 \| patch`. |
-| `ILINK_BOT_AGENT` | `GrokBotWeixin/0.1.0` | `base_info.bot_agent`. Must match `Name/Version`. |
+| `ILINK_BOT_AGENT` | `WeixinDeepSeek/0.1.0` | `base_info.bot_agent`. Must match `Name/Version`. |
 | `ILINK_ROUTE_TAG` | empty | Optional `SKRouteTag`. |
 | `WEIXIN_BOT_TOKEN` | empty | Optional seed. Both this and `WEIXIN_ACCOUNT_ID` are required. |
 | `WEIXIN_ACCOUNT_ID` | empty | iLink bot id (`ilink_bot_id`). |
@@ -71,15 +70,12 @@ Copy `.env.example` to `.env` for the Node runner. On Cloudflare, non-secrets ca
 | `WEIXIN_OWNER_USER_ID` | empty | Scanner id. Pinned when the allowlist is empty. |
 | `WEIXIN_ALLOW_FROM` | empty | Comma-separated sender ids. When set, this list replaces the stored allowlist. |
 | `WEIXIN_PIN_FIRST_SENDER` | `true` | Pin the scanner, otherwise the first inbound sender, when the allowlist is empty. |
-| `GROK_WEBHOOK_URL` | empty | Grok Bot routine webhook URL. Polling continues when this is empty; events are not delivered. |
-| `GROK_WEBHOOK_KEY` | empty | Sender key from the routine panel. |
-| `GROK_WEBHOOK_HEADER` | `Authorization` | Header that carries the key. Confirm this in the routine panel. |
-| `GROK_WEBHOOK_SCHEME` | `Bearer` | Prefix before the key. `raw` sends the key with no prefix. |
+| `DEEPSEEK_API_KEY` | required | DeepSeek API key. On Cloudflare, add it as a Worker secret; never put it in `wrangler.toml` or GitHub. |
 | `BRIDGE_PUBLIC_URL` | empty | Internet origin of this bridge, with no path. Written into `reply.url` as `{origin}/send`. |
 | `BRIDGE_TOKEN` | empty | Bearer token for `/send`, `/login`, and `/admin/*`. Empty rejects every protected call. |
 | `BRIDGE_HOST` | `127.0.0.1` | Node listen address. Docker sets `0.0.0.0`. |
 | `BRIDGE_PORT` | `8787` | Node listen port. |
-| `SEND_TYPING` | `true` | Send a typing indicator after a successful webhook forward. |
+| `SEND_TYPING` | `true` | Send an iLink typing indicator when supported. |
 | `LONG_POLL_TIMEOUT_MS` | `35000` | Client timeout for `getupdates`, clamped to 5–60 seconds. |
 | `WEBHOOK_MAX_ATTEMPTS` | `4` | Attempts for 429, 5xx, and network errors. Other 4xx are not retried. |
 | `RATE_LIMIT_SEND_PER_MINUTE` | `30` | Sliding window for HTTP `POST /send`. `GET /media/:id` is not counted. |
@@ -435,7 +431,6 @@ Authorization accepts `Authorization: Bearer <BRIDGE_TOKEN>` or the login cookie
 - `/send` is how the routine talks to your WeChat account. Keep `BRIDGE_TOKEN` in a secret, and publish the endpoint only over HTTPS.
 - The allowlist is the access-control list. With `WEIXIN_PIN_FIRST_SENDER=true` and an empty list, the first scanner or the first inbound sender is pinned and later senders are ignored. Set `WEIXIN_ALLOW_FROM` before login if someone else might message the bot first.
 - `/send` refuses peers that are not on the allowlist, including when you pass your own `to`.
-- The webhook event tells the model how to call `/send` and `GET /media/:id`, and uses a placeholder for the token. Put the real token in the routine secret, not in the prompt.
 - A media URL is not enough by itself. The id is random, the object expires, and the GET still requires `BRIDGE_TOKEN`.
 - `/history` is not public. The bearer token is not a page credential and is not placed in the URL. The one-shot code is single-use, stored only as a hash, and omitted from logs. The view cookie is `HttpOnly` and limited to `Path=/history`.
 - AES keys and CDN `encrypt_query_param` values are not written to the webhook or to logs. `full_url` is fetched only when it is public `https`.
@@ -456,7 +451,6 @@ Authorization accepts `Authorization: Bearer <BRIDGE_TOKEN>` or the login cookie
 - After `confirmed`, later API calls use `baseurl` from that response when it is present. QR login itself always starts at `ILINK_API_BASE`.
 - iLink user ids in the wild often end with `@im.wechat`. The bridge accepts any printable ASCII id up to 160 characters because the protocol doc does not fix the alphabet.
 - `getupdates` may echo the bot's own messages. Those are skipped. Whether that echo always happens was not re-checked against a live account.
-- One bad webhook cannot stop the cursor. It also cannot be retried forever; the routine will not see that message again unless WeChat delivers it with a new id.
 - No real WeChat account is contacted by `npm test`. See Development.
 
 ## Development
@@ -473,27 +467,26 @@ Tests cover header construction, the QR state machine, cursor persistence, dedup
 
 ## 中文说明
 
-这是一个把微信私聊接到 Grok Bot routine 的桥。协议对齐腾讯开源的 [openclaw-weixin](https://github.com/Tencent/openclaw-weixin)（MIT），代码是独立实现，不依赖 OpenClaw。
+这是一个个人微信 iLink Bot，直接调用 DeepSeek API 自动回复私聊消息。运行在 Cloudflare Workers + SQLite Durable Object，不需要 NN6000、VPS 或电脑常驻。
 
-推荐部署在 Cloudflare Workers：一个 Worker 加一个 SQLite Durable Object，用 alarm 做长轮询。Mac 上可以用 Node 加 launchd，再用 Cloudflare Tunnel 把本机的 `/send` 暴露到公网，因为 routine 在云端，必须能访问这个地址。
+### 部署流程（iPhone Safari）
 
-主人需要做的事：
+1. 在 Cloudflare Workers & Pages 中选择连接 GitHub，授权后选择仓库 `aklancc/grokbot-weixin`，分支选 `deepseek-cloudflare`。不要选 `main`。
+2. 使用仓库里的 `wrangler.toml` 配置部署；Worker 名称为 `wechat-ilink-deepseek`。构建/部署设置按 Cloudflare 页面识别的 Wrangler 项目配置执行。首次部署必须应用 Durable Object SQLite migrations。
+3. 在 Worker 的 Settings → Variables and Secrets 中添加两个 Secret：`DEEPSEEK_API_KEY`（你的 DeepSeek API Key）和 `BRIDGE_TOKEN`（自己生成的一串随机长密码）。这两个值不要写进 GitHub 文件或普通 Variables。
+4. 等待部署成功后，打开 `https://wechat-ilink-deepseek.<你的子域>.workers.dev/login`，输入 `BRIDGE_TOKEN`，开始扫码登录。
+5. 用微信扫码并在手机上确认。登录完成后，代码会优先把扫码账号对应的 iLink 用户 ID 写入白名单；其他发送者不会获得回复。
+6. 回到微信，给机器人发一条测试消息。Worker 会把消息和近期对话交给 DeepSeek，再把答案发回微信。
 
-1. `openssl rand -base64 32` 生成 `BRIDGE_TOKEN`。
-2. 在 Grok Bot routine 面板拿到 webhook URL 和 sender key，核对请求头（默认 `Authorization: Bearer <key>`），填到 `GROK_WEBHOOK_URL`、`GROK_WEBHOOK_KEY`、`GROK_WEBHOOK_HEADER`。
-3. Cloudflare：`wrangler secret put` 写入 `BRIDGE_TOKEN`、`GROK_WEBHOOK_URL`、`GROK_WEBHOOK_KEY`，`wrangler deploy`，再 `wrangler secret put BRIDGE_PUBLIC_URL` 为 Worker 的 https 源站。
-4. 浏览器打开 `https://<worker>/login`，输入 `BRIDGE_TOKEN`，用微信扫码确认。或在本机 `login` 后用 `export-session` 和 `POST /admin/session` 导入。
-5. 若使用了环境变量里的 token 而不是扫码，先访问一次 `GET /health`，轮询才会开始。
-6. 把上面的英文 routine 提示词贴进 routine，并把 `BRIDGE_TOKEN` 放进 routine 的 secret。收到消息后，routine 按事件里的 `reply` 字段调用 `/send`。白名单里只有一个发送者时，主动发消息可以省略 `to`。
-7. 白名单默认钉住扫码的微信号。若要手工指定，设置 `WEIXIN_ALLOW_FROM` 或调用 `POST /admin/allowlist`。
+### 安全与使用
 
-图片、文件和视频会先下载并解密，再放进 Durable Object（Node 则是 `$GROKBOT_STATE_DIR/media`）。事件里的 `media[].url` 是 `GET /media/:id`，要用同一个 `BRIDGE_TOKEN`，并在 `expires_at_ms` 之前取走。语音如果带了 `voice_item.text`，会出现在 `text` 和 `media[].transcript`。Cloudflare 上语音文件是原始 SILK（`audio/silk`）；Node 和 Docker 会尽量转成 WAV。引用消息在 `quote` 里，结构与正文附件相同。不需要新建 R2 bucket，也不用改 `wrangler.toml`。
+- `DEEPSEEK_API_KEY` 和 `BRIDGE_TOKEN` 都必须作为 Cloudflare Secret 保存，不能截图或发给别人。
+- 本项目面向个人账号私聊，不处理群聊。默认白名单只允许扫码登录者；如果登录响应没有返回扫码者 ID，不要开放“首位发消息者自动加入”给陌生人，应先手动确认白名单。
+- 微信语音会使用微信提供的转写文本；图片/文件/视频会被接收和暂存，但当前 DeepSeek 接入只把附件类型、文件名和语音转写作为文字上下文，不会把图片像视觉模型那样识别。
+- 对话历史默认保留最多 30 轮、约 12000 字、24 小时；发送 `/new` 或 `/reset` 可清空当前私聊历史。
+- DeepSeek API 按实际输入和输出 Token 计费。Cloudflare Worker 本身的用量也受 Cloudflare 计划限制。
 
-每条 webhook 都带 `history`：这个发送者最近的对话，从旧到新，不含当前这条。`role` 为 `user` 是对方发来的，`assistant` 是桥成功发出去的文字（包含主动 `/send`）。默认保留 30 轮、约 12000 字、24 小时，可用 `HISTORY_MAX_TURNS`、`HISTORY_MAX_CHARS`、`HISTORY_TTL_MS` 调整。历史里的附件只有种类、文件名和转写，没有下载地址。用户单独发送 `/new` 或 `/reset` 会清空该发送者的历史，微信里收到一句确认，routine 不会收到这条命令。历史读写失败不会把已经发给微信的消息报成失败，也不会少发或多发 webhook。
-
-要在网页上看对话：routine 用 `BRIDGE_TOKEN` 调用 `POST /history/session`，只把返回的 `url` 发给用户。那个地址里的码只能用一次，打开后变成 HttpOnly cookie 并跳到 `/history`。默认 15 分钟过期，上限 30 分钟（`HISTORY_VIEW_TTL_MS`）。不要把 `BRIDGE_TOKEN` 放进链接。语音转写来自微信，页面上只出现一次。WAV、MP3 这类浏览器能直接播的录音用音频控件。Worker 仍把语音存成 SILK（`audio/silk`），历史页在浏览器里用 wasm 播放，轮询路径不解码。过期或没有媒体 id 时只显示转写。`/health` 里 `history_view` 为 true 时，说明当前进程带有这个页面。部署里的迁移 `v2` 把 Durable Object 类从 `AccountDurableObject` 改名为 `AccountDurableObjectV2`，SQLite 里的登录、白名单和历史跟着走，不用重新扫码。实例名仍是 `owner`。
-
-`npm test` 和 `npm run build` 只针对模拟的 iLink 服务和模拟 CDN。真实微信扫码无法在 CI 里完成。
+协议基于腾讯开源的 [openclaw-weixin](https://github.com/Tencent/openclaw-weixin)（MIT）独立实现。`npm test` 与 `npm run build` 需要在具备 Node.js 22 的环境中执行；真实微信扫码仍需上线后测试。
 
 ## License
 
