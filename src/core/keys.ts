@@ -13,4 +13,5 @@ export const KEYS = {
   notifyStarted: "notify_started",
   pollFailures: "poll_failures",
   historyViews: "history_views",
+  aiProvider: "ai_provider",
 } as const;

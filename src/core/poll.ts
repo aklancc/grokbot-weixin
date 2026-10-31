@@ -176,6 +176,13 @@ async function handleMessage(
   const built = normalizeInbound(msg, session.accountId, app.config.bridgePublicUrl);
   const event = await resolveInboundMedia(app, built);
   if (isForwardable(event)) {
+    if (await handleModelCommand(app, event)) {
+      return {
+        seen: nextSeen,
+        ...(nextAllow !== allow ? { allow: nextAllow } : {}),
+        ...(nextTokens !== tokens ? { tokens: nextTokens } : {}),
+      };
+    }
     if (app.config.historyReset && isHistoryReset(event)) {
       await clearPeerHistory(app, sender);
       logInfo("history_reset", { sender });
@@ -197,7 +204,20 @@ async function handleMessage(
       event.history = [];
       logWarn("history_read_failed", { sender, error: publicError(err) });
     }
-    const ok = await replyWithAI(app, event);
+    const selectedProvider = (await app.storage.get(KEYS.aiProvider)) ?? "custom";
+    const aiApp: BridgeApp =
+      selectedProvider === "deepseek"
+        ? {
+            ...app,
+            config: {
+              ...app.config,
+              aiApiBase: "https://api.deepseek.com",
+              aiApiKey: app.config.deepseekApiKey,
+              aiModel: "deepseek-chat",
+            },
+          }
+        : app;
+    const ok = await replyWithAI(aiApp, event);
     logInfo("inbound_replied", {
       sender,
       message_id: event.message_id,
@@ -213,6 +233,45 @@ async function handleMessage(
     ...(nextAllow !== allow ? { allow: nextAllow } : {}),
     ...(nextTokens !== tokens ? { tokens: nextTokens } : {}),
   };
+}
+
+async function handleModelCommand(app: BridgeApp, event: import("./types.js").InboundEvent): Promise<boolean> {
+  const command = event.text.trim().toLowerCase();
+  if (command !== "/model" && !command.startsWith("/model ")) return false;
+
+  const selection = command.slice("/model".length).trim();
+  const current = (await app.storage.get(KEYS.aiProvider)) ?? "custom";
+  let reply: string;
+
+  if (!selection || selection === "help") {
+    reply = [
+      "模型切换：",
+      "/model deepseek —— 切换到 DeepSeek",
+      "/model custom —— 切回 Cloudflare 中配置的自定义模型",
+      "/model —— 查看当前模型",
+      "",
+      `当前模式：${current === "deepseek" ? "DeepSeek（deepseek-chat）" : `自定义（${app.config.aiModel}）`}`,
+    ].join("\n");
+  } else if (selection === "deepseek") {
+    if (!app.config.deepseekApiKey.trim()) {
+      reply = "没有检测到原来的 DEEPSEEK_API_KEY。请先在 Cloudflare 中恢复这个 Secret，再发送 /model deepseek。";
+    } else {
+      await app.storage.set(KEYS.aiProvider, "deepseek");
+      reply = "已切换到 DeepSeek（deepseek-chat）。之后的普通消息将使用 DeepSeek。";
+    }
+  } else if (selection === "custom") {
+    await app.storage.delete(KEYS.aiProvider);
+    reply = `已切回自定义模型：${app.config.aiModel}。将使用 Cloudflare 中配置的 AI_API_BASE、AI_API_KEY 和 AI_MODEL。`;
+  } else {
+    reply = "不认识这个模型选项。发送 /model help 查看用法。";
+  }
+
+  await sendBridgeText(app, {
+    to: event.sender.id,
+    text: reply,
+    ...(event.context_token ? { contextToken: event.context_token } : {}),
+  });
+  return true;
 }
 
 async function sendTypingBestEffort(
