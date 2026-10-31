@@ -199,26 +199,14 @@ async function handleMessage(
       event.history = [];
       logWarn("history_read_failed", { sender, error: publicError(err) });
     }
-    const result = await postWebhook(
-      {
-        url: app.config.webhookUrl,
-        key: app.config.webhookKey,
-        headerName: app.config.webhookHeader,
-        scheme: app.config.webhookScheme,
-        maxAttempts: app.config.webhookMaxAttempts,
-      },
-      event,
-      appFetch(app),
-      appSleep(app),
-    );
-    logInfo("inbound_forwarded", {
+    const ok = await replyWithDeepSeek(app, event);
+    logInfo("inbound_replied", {
       sender,
       message_id: event.message_id,
       type: event.type,
-      ok: result.ok,
-      status: result.status ?? null,
+      ok,
     });
-    if (result.ok && app.config.sendTyping && msg.context_token) {
+    if (ok && app.config.sendTyping && msg.context_token) {
       await sendTypingBestEffort(app, session, sender, msg.context_token);
     }
   }
