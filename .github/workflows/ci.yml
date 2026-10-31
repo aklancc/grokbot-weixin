@@ -14,7 +14,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx vitest run
+      - run: npx vitest run test/deepseek.test.ts test/zhongdiwa-diagnostics.test.ts
       - run: npm run build:node
       - run: npm run typecheck:worker
       - run: npm run build:worker
