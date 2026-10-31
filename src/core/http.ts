@@ -84,7 +84,8 @@ export async function healthReport(app: BridgeApp): Promise<Record<string, unkno
 
 async function loginPage(request: Request, app: BridgeApp): Promise<Response> {
   if (!(await isAuthorized(request, app.config.bridgeToken))) {
-    const sessionWasSet = new URL(request.url).searchParams.get("session") === "ok";\n    return html(renderTokenForm(sessionWasSet ? "密码已验证，但浏览器没有保留登录状态。请允许此网站使用 Cookie 后重试。" : ""), 200, false);
+    const sessionWasSet = new URL(request.url).searchParams.get("session") === "ok";
+    return html(renderTokenForm(sessionWasSet ? "密码已验证，但浏览器没有保留登录状态。请允许此网站使用 Cookie 后重试。" : ""), 200, false);
   }
   return html(renderLoginApp(), 200, new URL(request.url).protocol === "https:");
 }
