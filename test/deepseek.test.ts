@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { replyWithDeepSeek } from "../src/core/deepseek.js";
+import { replyWithAI } from "../src/core/deepseek.js";
 import { writeAllowlist, writeSession } from "../src/core/state.js";
 import type { InboundEvent } from "../src/core/types.js";
 import { makeApp, mockFetch } from "./support.js";
@@ -71,7 +71,7 @@ describe("DeepSeek direct reply", () => {
     });
     await writeAllowlist(app.storage, ["owner@im.wechat"]);
 
-    expect(await replyWithDeepSeek(app, inbound())).toBe(true);
+    expect(await replyWithAI(app, inbound())).toBe(true);
     const ai = mock.calls.find((call) => call.url.hostname === "api.deepseek.com");
     expect(ai?.headers.get("authorization")).toBe("Bearer deepseek-test-key");
     const payload = JSON.parse(ai?.body ?? "{}") as {
