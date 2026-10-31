@@ -95,11 +95,11 @@ export async function replyWithAI(app: BridgeApp, event: InboundEvent): Promise<
         auth_scheme: "Bearer",
         actor_authorization_present: headers.has("x-openai-actor-authorization"),
         content_type: headers.get("content-type"),
-        input_items: body.input.length,
-        input_roles: body.input.map((item) => item.role).join(","),
+        input_items: messages.length - 1,
+        input_roles: messages.slice(1).map((item) => item.role).join(","),
         input_content_type: "input_text",
-        store: body.store,
-        max_output_tokens: body.max_output_tokens,
+        store: false,
+        max_output_tokens: 1_200,
       });
     }
 
