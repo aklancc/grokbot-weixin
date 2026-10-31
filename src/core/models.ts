@@ -8,7 +8,7 @@ export async function fetchAvailableModels(app: BridgeApp): Promise<string[]> {
     throw new Error("请先在 Cloudflare 中配置 AI_API_BASE 和 AI_API_KEY。");
   }
 
-  const endpoint = `${aiApiBase.replace(/\\/+$/, "")}/models`;
+  const endpoint = `${aiApiBase.replace(/\/+$/, "")}/models`;
   const response = await appFetch(app)(endpoint, {
     method: "GET",
     headers: { Authorization: `Bearer ${aiApiKey}` },
