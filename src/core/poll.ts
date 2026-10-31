@@ -163,10 +163,8 @@ async function handleMessage(
     nextSeen = remembered.seen;
   }
   let nextAllow = allow;
-  if (sender && nextAllow.length === 0 && app.config.pinFirstSender && app.config.allowFrom.length === 0) {
-    nextAllow = [sender];
-    logInfo("pinned_sender", { sender });
-  }
+  // Fail closed: never let an arbitrary first inbound sender claim a personal bot.
+  // The QR scanner is pinned during login when iLink supplies its user id.
   if (!sender || !nextAllow.includes(sender)) {
     logInfo("ignored_sender", { sender: sender || null });
     return { seen: nextSeen, ...(nextAllow !== allow ? { allow: nextAllow } : {}) };
