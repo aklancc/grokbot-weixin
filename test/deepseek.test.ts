@@ -137,7 +137,7 @@ describe("AI provider replies", () => {
 
     expect(await replyWithAI(app, inbound())).toBe(false);
     expect(mock.calls.find((item) => item.url.pathname === "/v1/responses")?.method).toBe("POST");
-    expect(mock.calls.find((item) => item.url.pathname === "/ilink/bot/sendmessage")?.body).toContain("我暂时无法生成回复");
+    expect(mock.calls.find((item) => item.url.pathname === "/ilink/bot/sendmessage")?.body).toContain("刚才回复失败了");
   });
 
   it("treats an incomplete Responses API result without output text as a failed generation", async () => {
