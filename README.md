@@ -1,12 +1,12 @@
-# Weixin DeepSeek Bot
+# Weixin Multi-Model Bot
 
-个人微信 iLink Bot：通过微信私聊与 DeepSeek 对话。运行在 Cloudflare Workers + SQLite Durable Object，不需要 NN6000、VPS 或电脑常驻。
+个人微信 iLink Bot：通过微信私聊调用 OpenDoor 中转 API 的多种模型，并保留 DeepSeek 官方 API 作为备用。运行在 Cloudflare Workers + SQLite Durable Object，不需要 NN6000、VPS 或电脑常驻。
 
 ## 当前功能
 
 - 微信扫码登录 iLink Bot。
 - Cloudflare Durable Object Alarm 持续轮询微信私聊。
-- 将当前消息和近期对话历史发送到 DeepSeek Chat Completions API。
+- 将当前消息和近期对话历史发送到 OpenAI Chat Completions 兼容 API。\n- 通过 `/model` 动态读取自定义 API 的 `/models` 列表，并用 `/model <模型ID>` 切换模型。\n- `/model deepseek` 切换到 DeepSeek 官方 API；`/model custom` 恢复 Cloudflare 默认自定义模型。
 - 将 DeepSeek 回复发回微信。
 - 只处理白名单中的私聊发送者；群聊和机器人自身消息会被忽略。
 - 对话历史默认最多 30 轮、约 12000 字、24 小时；发送 `/new` 或 `/reset` 清空历史。
@@ -28,11 +28,11 @@
 
 ## 安全注意事项
 
-- 不要把 `DEEPSEEK_API_KEY` 或 `BRIDGE_TOKEN` 写入 GitHub、普通 Variables 或公开截图；必须使用 Cloudflare Secret。
+- 不要把 `AI_API_KEY`、`DEEPSEEK_API_KEY` 或 `BRIDGE_TOKEN` 写入 GitHub、普通 Variables 或公开截图；必须使用 Cloudflare Secret。
 - 本项目按个人账号使用设计。不会自动把任意第一个来信者加入白名单；若 iLink 登录响应没有提供扫码者 ID，机器人会保持不回复，避免陌生人抢先占用。
 - 只处理私聊，不处理群聊。
-- 如需检查状态，可访问 Worker 的 `/health`。健康信息只显示是否已登录、白名单数量及 DeepSeek 是否已配置，不显示密钥。
-- DeepSeek API 按实际输入和输出 Token 计费；Cloudflare 使用量受账号计划限制。
+- 如需检查状态，可访问 Worker 的 `/health`。健康信息只显示是否已登录、白名单数量及 API 密钥是否已配置，不显示密钥。
+- OpenDoor 和 DeepSeek 的价格、额度及模型可用性以各自平台账户为准；Cloudflare 使用量受账号计划限制。
 
 ## 本地检查
 
