@@ -9,6 +9,7 @@ export { AccountDurableObjectV2 };
 type AccountStub = DurableObjectStub & {
   handleHttp(request: Request): Promise<Response>;
   hasDeepSeekKey(): Promise<boolean>;
+  hasBridgeToken(): Promise<boolean>;
 };
 
 /** Route every request to the single account Durable Object. */
@@ -22,10 +23,13 @@ export default {
     if (request.method === "GET" && url.pathname === "/__envcheck") {
       const stub = env.ACCOUNT.getByName("owner") as AccountStub;
       const doHasKey = await stub.hasDeepSeekKey();
+      const doHasBridgeToken = await stub.hasBridgeToken();
       return new Response(JSON.stringify({
         ok: true,
         outer_worker_has_deepseek_key: Boolean(env.DEEPSEEK_API_KEY?.trim()),
         durable_object_has_deepseek_key: doHasKey,
+        outer_worker_has_bridge_token: Boolean(env.BRIDGE_TOKEN?.trim()),
+        durable_object_has_bridge_token: doHasBridgeToken,
       }), {
         headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
       });
