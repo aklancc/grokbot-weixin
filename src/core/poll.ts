@@ -29,7 +29,7 @@ import {
 } from "./state.js";
 import { sendBridgeText } from "./send.js";
 import type { GetUpdatesResp, WeixinMessage } from "./types.js";
-import { postWebhook } from "./webhook.js";
+import { replyWithDeepSeek } from "./deepseek.js";
 
 export interface PollStepOutcome {
   /** Delay before the next poll. The long poll itself already waited. */
