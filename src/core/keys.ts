@@ -14,4 +14,5 @@ export const KEYS = {
   pollFailures: "poll_failures",
   historyViews: "history_views",
   aiProvider: "ai_provider",
+  aiModel: "ai_model",
 } as const;
