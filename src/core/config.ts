@@ -112,6 +112,7 @@ export function configFromEnv(env: EnvMap): BridgeConfig {
     ...(route && /^[A-Za-z0-9_.:-]{1,64}$/.test(route) ? { routeTag: route } : {}),
     allowFrom: splitList(env.WEIXIN_ALLOW_FROM),
     pinFirstSender: boolEnv(env.WEIXIN_PIN_FIRST_SENDER, true),
+    deepseekApiKey: env.DEEPSEEK_API_KEY ?? "",
     webhookUrl: env.GROK_WEBHOOK_URL?.trim() ?? "",
     webhookKey: env.GROK_WEBHOOK_KEY ?? "",
     webhookHeader: env.GROK_WEBHOOK_HEADER?.trim() || "Authorization",
