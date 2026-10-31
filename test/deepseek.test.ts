@@ -116,6 +116,53 @@ describe("AI provider replies", () => {
     expect(mock.calls.find((item) => item.url.pathname === "/ilink/bot/sendmessage")?.body).toContain("中低洼测试成功");
   });
 
+  it("handles a non-JSON Responses API error without losing the failure path", async () => {
+    const mock = mockFetch((request) => {
+      if (request.url.hostname === "www.zhongdiwa.com") {
+        return { status: 502, body: "upstream unavailable" };
+      }
+      if (request.url.pathname === "/ilink/bot/sendmessage") {
+        return { status: 200, body: JSON.stringify({ ret: 0, message_id: "out-error" }) };
+      }
+      return { status: 404, body: "" };
+    });
+    const app = makeApp(mock.fetchImpl, {
+      aiApiBase: "https://www.zhongdiwa.com/v1",
+      aiApiKey: "zhongdiwa-test-token",
+      aiModel: "gpt-5.5",
+      aiApiProtocol: "responses",
+    });
+    await writeSession(app.storage, { botToken: "bot-secret", accountId: "bot@im.wechat", savedAt: 1 });
+    await writeAllowlist(app.storage, ["owner@im.wechat"]);
+
+    expect(await replyWithAI(app, inbound())).toBe(false);
+    expect(mock.calls.find((item) => item.url.pathname === "/v1/responses")?.method).toBe("POST");
+    expect(mock.calls.find((item) => item.url.pathname === "/ilink/bot/sendmessage")?.body).toContain("我暂时无法生成回复");
+  });
+
+  it("treats an incomplete Responses API result without output text as a failed generation", async () => {
+    const mock = mockFetch((request) => {
+      if (request.url.hostname === "www.zhongdiwa.com") {
+        return { status: 200, body: JSON.stringify({ status: "incomplete", incomplete_details: { reason: "max_output_tokens" }, output: [] }) };
+      }
+      if (request.url.pathname === "/ilink/bot/sendmessage") {
+        return { status: 200, body: JSON.stringify({ ret: 0, message_id: "out-incomplete" }) };
+      }
+      return { status: 404, body: "" };
+    });
+    const app = makeApp(mock.fetchImpl, {
+      aiApiBase: "https://www.zhongdiwa.com/v1",
+      aiApiKey: "zhongdiwa-test-token",
+      aiModel: "gpt-5.5",
+      aiApiProtocol: "responses",
+    });
+    await writeSession(app.storage, { botToken: "bot-secret", accountId: "bot@im.wechat", savedAt: 1 });
+    await writeAllowlist(app.storage, ["owner@im.wechat"]);
+
+    expect(await replyWithAI(app, inbound())).toBe(false);
+    expect(mock.calls.find((item) => item.url.pathname === "/ilink/bot/sendmessage")?.body).toContain("刚才回复失败了");
+  });
+
   it("does not call the provider or send a message without an API key", async () => {
     const mock = mockFetch(() => ({ status: 200, body: "{}" }));
     const app = makeApp(mock.fetchImpl, { aiApiKey: "" });
