@@ -85,7 +85,11 @@ export async function healthReport(app: BridgeApp): Promise<Record<string, unkno
 async function loginPage(request: Request, app: BridgeApp): Promise<Response> {
   if (!(await isAuthorized(request, app.config.bridgeToken))) {
     const sessionWasSet = new URL(request.url).searchParams.get("session") === "ok";
-    return html(renderTokenForm(sessionWasSet ? "密码已验证，但浏览器没有保留登录状态。请允许此网站使用 Cookie 后重试。" : ""), 200, false);
+    const sessionCookie = readCookie(request.headers.get("Cookie"), "gb_session");
+    const diagnostic = sessionCookie
+      ? "浏览器已发送登录 Cookie，但服务器验证不通过。请检查 Cloudflare 中 BRIDGE_TOKEN 是否在外层 Worker 与 Durable Object 中一致。"
+      : "浏览器没有发送登录 Cookie。请确认使用普通浏览器页面，并检查是否拦截了此网站的 Cookie。";
+    return html(renderTokenForm(sessionWasSet ? diagnostic : ""), 200, false);
   }
   return html(renderLoginApp(), 200, new URL(request.url).protocol === "https:");
 }
