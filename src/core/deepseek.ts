@@ -1,7 +1,7 @@
 import type { BridgeApp } from "./app.js";
 import type { InboundEvent } from "./types.js";
 import { appFetch } from "./app.js";
-import { logWarn, publicError } from "./log.js";
+import { logInfo, logWarn, publicError } from "./log.js";
 import { sendBridgeText } from "./send.js";
 
 const SYSTEM_PROMPT = "你是一个通过微信与用户交流的中文 AI 助手。请用自然、清晰、简洁的中文回答。遇到不确定的信息要明确说明，不要编造。";
@@ -85,6 +85,24 @@ export async function replyWithAI(app: BridgeApp, event: InboundEvent): Promise<
           stream: false,
         };
 
+    if (isResponses) {
+      logInfo("ai_responses_request", {
+        provider: new URL(aiApiBase).hostname,
+        endpoint: new URL(endpoint).pathname,
+        model: aiModel,
+        client_request_id: clientRequestId,
+        method: "POST",
+        auth_scheme: "Bearer",
+        actor_authorization_present: headers.has("x-openai-actor-authorization"),
+        content_type: headers.get("content-type"),
+        input_items: body.input.length,
+        input_roles: body.input.map((item) => item.role).join(","),
+        input_content_type: "input_text",
+        store: body.store,
+        max_output_tokens: body.max_output_tokens,
+      });
+    }
+
     stage = "provider_fetch";
     const response = await appFetch(app)(endpoint, {
       method: "POST",
@@ -96,7 +114,8 @@ export async function replyWithAI(app: BridgeApp, event: InboundEvent): Promise<
     const responseText = await response.text();
     const responseDiagnostics = providerResponseDiagnostics(response);
     if (isResponses) {
-      logWarn("ai_responses_http_result", {
+      const logResult = response.ok ? logInfo : logWarn;
+      logResult("ai_responses_http_result", {
         provider: new URL(aiApiBase).hostname,
         model: aiModel,
         client_request_id: clientRequestId,
