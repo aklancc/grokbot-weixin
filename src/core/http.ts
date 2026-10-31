@@ -530,7 +530,7 @@ function sessionCookie(token: string, secure: boolean): string {
   const parts = [
     `gb_session=${encodeURIComponent(token)}`,
     "HttpOnly",
-    "SameSite=Strict",
+    "SameSite=Lax",
     "Path=/",
     "Max-Age=43200",
   ];
