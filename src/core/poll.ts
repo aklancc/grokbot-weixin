@@ -241,7 +241,7 @@ async function handleMessage(
 
 async function handleModelCommand(app: BridgeApp, event: import("./types.js").InboundEvent): Promise<boolean> {
   const raw = event.text.trim();
-  if (!/^\\/model(?:\\s|$)/i.test(raw)) return false;
+  if (!/^\/model(?:\s|$)/i.test(raw)) return false;
 
   const selection = raw.slice("/model".length).trim();
   const normalized = selection.toLowerCase();
