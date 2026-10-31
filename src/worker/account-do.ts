@@ -31,6 +31,11 @@ export class AccountDurableObjectV2 extends DurableObject<Env> {
     });
   }
 
+  /** Safe diagnostic RPC: reports presence only, never returns the secret. */
+  async hasDeepSeekKey(): Promise<boolean> {
+    return Boolean(this.env.DEEPSEEK_API_KEY?.trim());
+  }
+
   /** Proxy the bridge HTTP API onto this account. */
   override async fetch(request: Request): Promise<Response> {
     return this.dispatch(request);
