@@ -109,10 +109,11 @@ describe("AI provider replies", () => {
     expect(call?.url.pathname).toBe("/v1/responses");
     expect(call?.headers.get("authorization")).toBe("Bearer zhongdiwa-test-token");
     expect(call?.headers.get("x-openai-actor-authorization")).toBe("local-image-extension");
-    const payload = JSON.parse(call?.body ?? "{}") as { model: string; instructions: string; input: Array<{ role: string }> };
+    const payload = JSON.parse(call?.body ?? "{}") as { model: string; instructions: string; input: Array<{ role: string; content: string }> };
     expect(payload.model).toBe("gpt-5.5");
     expect(payload.instructions).toContain("微信");
     expect(payload.input.map((item) => item.role)).toEqual(["user", "assistant", "user"]);
+    expect(payload.input.map((item) => item.content)).toEqual(["之前的问题", "之前的回答", "你好"]);
     expect(mock.calls.find((item) => item.url.pathname === "/ilink/bot/sendmessage")?.body).toContain("中低洼测试成功");
   });
 

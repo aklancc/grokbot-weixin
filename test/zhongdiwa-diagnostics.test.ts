@@ -75,7 +75,7 @@ describe("Zhongdiwa Responses API diagnostics", () => {
     expect(logs).toContain("ai_responses_request");
     expect(logs).toContain('"auth_scheme":"Bearer"');
     expect(logs).toContain('"actor_authorization_present":true');
-    expect(logs).toContain('"input_content_type":"input_text"');
+    expect(logs).toContain('"input_content_type":"text"');
     expect(logs).toContain("upstream-test-request-123");
     expect(logs).toContain('"retry_after":"30"');
     expect(logs).toContain('"http_status":503');

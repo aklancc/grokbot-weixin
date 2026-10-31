@@ -70,9 +70,11 @@ export async function replyWithAI(app: BridgeApp, event: InboundEvent): Promise<
       ? {
           model: aiModel,
           instructions: SYSTEM_PROMPT,
+          // Send message content as plain text. This is valid Responses API input
+          // and avoids providers that incorrectly validate input_text as an output type.
           input: messages.slice(1).map((message) => ({
             role: message.role,
-            content: [{ type: "input_text", text: message.content }],
+            content: message.content,
           })),
           max_output_tokens: 1_200,
           store: false,
@@ -97,7 +99,7 @@ export async function replyWithAI(app: BridgeApp, event: InboundEvent): Promise<
         content_type: headers.get("content-type"),
         input_items: messages.length - 1,
         input_roles: messages.slice(1).map((item) => item.role).join(","),
-        input_content_type: "input_text",
+        input_content_type: "text",
         store: false,
         max_output_tokens: 1_200,
       });
