@@ -84,12 +84,10 @@ describe("poll step", () => {
           message({ message_id: "3", group_id: "room", from_user_id: "owner@im.wechat" }),
         ],
       }));
-    });
     const app = makeApp(mock.fetchImpl, {
       allowFrom: [],
       pinFirstSender: true,
       sendTyping: false,
-      webhookMaxAttempts: 1,
     });
     await seed(app);
     const outcome = await runPollStep(app);
