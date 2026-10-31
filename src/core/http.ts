@@ -76,7 +76,7 @@ export async function healthReport(app: BridgeApp): Promise<Record<string, unkno
     allowlist_count: allow.length,
     paused,
     paused_until: paused ? pauseUntil : null,
-    webhook_configured: Boolean(app.config.webhookUrl),
+    deepseek_configured: Boolean(app.config.deepseekApiKey),
     public_url_configured: Boolean(app.config.bridgePublicUrl),
     history_view: true,
   };
