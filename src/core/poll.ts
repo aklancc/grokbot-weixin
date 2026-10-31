@@ -1,5 +1,5 @@
 import type { BridgeApp } from "./app.js";
-import { appFetch, appNow, appSleep } from "./app.js";
+import { appNow } from "./app.js";
 import {
   HISTORY_RESET_ACK,
   MAX_LONG_POLL_MS,
