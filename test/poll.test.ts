@@ -74,6 +74,36 @@ describe("poll step", () => {
     expect(cursors).toEqual(["", "c1"]);
   });
 
+  it("switches to the preserved DeepSeek key with a WeChat command", async () => {
+    const mock = mockFetch((request) => answer(request, () => ({
+      ret: 0,
+      get_updates_buf: "c-model",
+      msgs: [
+        message({ message_id: "switch", item_list: [{ type: 1, text_item: { text: "/model deepseek" } }] }),
+        message({ message_id: "chat", item_list: [{ type: 1, text_item: { text: "你好" } }] }),
+      ],
+    })));
+    const app = makeApp(mock.fetchImpl, {
+      allowFrom: ["owner@im.wechat"],
+      sendTyping: false,
+      aiApiBase: "https://ai.opendoor.sbs/v1",
+      aiApiKey: "custom-test-key",
+      aiModel: "custom-model",
+    });
+    await seed(app);
+    await runPollStep(app);
+
+    const aiCalls = mock.calls.filter((call) => call.url.pathname.endsWith("/chat/completions"));
+    expect(aiCalls).toHaveLength(1);
+    expect(aiCalls[0]?.url.hostname).toBe("api.deepseek.com");
+    expect(aiCalls[0]?.headers.get("authorization")).toBe("Bearer deepseek-test-key");
+    expect(JSON.parse(aiCalls[0]?.body ?? "{}").model).toBe("deepseek-chat");
+    const sent = mock.calls.filter((call) => call.url.pathname === "/ilink/bot/sendmessage");
+    expect(sent.some((call) => call.body.includes("已切换到 DeepSeek"))).toBe(true);
+    expect(sent.some((call) => call.body.includes("DeepSeek test reply"))).toBe(true);
+    expect(await app.storage.get(KEYS.aiProvider)).toBe("deepseek");
+  });
+
   it("fails closed when the QR scanner ID is unavailable", async () => {
     const mock = mockFetch((request) => answer(request, () => ({
         ret: 0,
