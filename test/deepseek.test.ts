@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { replyWithAI } from "../src/core/deepseek.js";
+import { fetchAvailableModels } from "../src/core/models.js";
 import { writeAllowlist, writeSession } from "../src/core/state.js";
 import type { InboundEvent } from "../src/core/types.js";
 import { makeApp, mockFetch } from "./support.js";
@@ -116,5 +117,28 @@ describe("DeepSeek direct reply", () => {
     const app = makeApp(mock.fetchImpl, { aiApiKey: "" });
     expect(await replyWithAI(app, inbound())).toBe(false);
     expect(mock.calls).toHaveLength(0);
+  });
+});
+
+
+describe("OpenDoor model discovery", () => {
+  it("loads, deduplicates, and sorts model IDs from the configured /models endpoint", async () => {
+    const mock = mockFetch((request) => {
+      if (request.url.pathname === "/v1/models") {
+        return {
+          status: 200,
+          body: JSON.stringify({ data: [{ id: "model-z" }, { id: "model-a" }, { id: "model-z" }] }),
+        };
+      }
+      return { status: 404, body: "" };
+    });
+    const app = makeApp(mock.fetchImpl, {
+      aiApiBase: "https://ai.opendoor.sbs/v1",
+      aiApiKey: "demo-token",
+    });
+
+    await expect(fetchAvailableModels(app)).resolves.toEqual(["model-a", "model-z"]);
+    const call = mock.calls.find((item) => item.url.pathname === "/v1/models");
+    expect(call?.headers.get("authorization")).toBe("Bearer demo-token");
   });
 });
