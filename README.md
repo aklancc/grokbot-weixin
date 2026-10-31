@@ -18,13 +18,16 @@
 2. 授权 GitHub 后选择仓库 `aklancc/grokbot-weixin`，分支必须选择 `deepseek-cloudflare`，不要选 `main`。
 3. 使用仓库中的 `wrangler.toml`。Worker 名称为 `wechat-ilink-deepseek`，Durable Object SQLite binding 和 migrations 已写在配置中。
 4. 若使用 Cloudflare Workers Builds，安装命令使用 `npm ci`，部署命令使用 `npx wrangler deploy`。确保部署日志显示 Durable Object migrations 已应用。
-5. 在 Worker 的 **Settings → Variables and Secrets** 中添加以下两个 **Secret**：
-   - `DEEPSEEK_API_KEY`：DeepSeek API Key。
-   - `BRIDGE_TOKEN`：一段自己生成的高强度随机密码，用于保护登录管理接口。
-6. 触发一次新部署，让 Secret 生效。
+5. 在 Worker 的 **Settings → Variables and Secrets** 中添加：
+   - **Variable** `AI_API_BASE`：`https://ai.opendoor.sbs/v1`。
+   - **Secret** `AI_API_KEY`：OpenDoor 的 API Key。
+   - **Variable** `AI_MODEL`：OpenDoor 账户中可用的默认模型 ID。
+   - **Secret** `DEEPSEEK_API_KEY`：DeepSeek 官方 API Key，作为备用；不使用官方 DeepSeek 时可不配置。
+   - **Secret** `BRIDGE_TOKEN`：一段自己生成的高强度随机密码，用于保护登录管理接口。
+6. 保存后触发一次新部署，让变量和 Secret 生效。
 7. 打开 `https://wechat-ilink-deepseek.<你的 workers.dev 子域>.workers.dev/login`，输入 `BRIDGE_TOKEN`，开始微信扫码登录。
 8. 在微信中扫码并确认。登录成功后，iLink 返回的扫码用户 ID 会被加入白名单。
-9. 给机器人发送一条私聊消息测试。成功时应收到 DeepSeek 回复。
+9. 给机器人发送一条私聊消息测试。成功时应收到所选模型的回复。
 
 ## 安全注意事项
 
