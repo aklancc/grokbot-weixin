@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import { KEYS } from "../src/core/keys.js";
 import { runPollStep } from "../src/core/poll.js";
-import { postWebhook } from "../src/core/webhook.js";
 import { readAllowlist, readContextTokens, readDedupe, writeSession } from "../src/core/state.js";
 import { makeApp, mockFetch, type CapturedRequest } from "./support.js";
 import type { BridgeApp } from "../src/core/app.js";
@@ -56,20 +55,14 @@ describe("poll step", () => {
     expect(await app.storage.get(KEYS.cursor)).toBe("c2");
     expect(await readDedupe(app.storage)).toEqual(["100"]);
     expect((await readContextTokens(app.storage))["owner@im.wechat"]).toBe("ctx-1");
-    const hooks = mock.calls.filter((call) => call.url.hostname === "routine.example");
-    expect(hooks).toHaveLength(1);
-    const event = JSON.parse(hooks[0]?.body ?? "{}") as {
-      text: string;
-      sender: { name: string | null };
-      context_token: string;
-      reply: { url: string; body: { to: string } };
-    };
-    expect(event.text).toBe(TEXT);
-    expect(event.sender.name).toBeNull();
-    expect(event.context_token).toBe("ctx-1");
-    expect(event.reply.url).toBe("https://bridge.example/send");
-    expect(event.reply.body.to).toBe("owner@im.wechat");
-    expect(hooks[0]?.headers.get("authorization")).toBe("Bearer whsec");
+    const aiCalls = mock.calls.filter((call) => call.url.hostname === "api.deepseek.com");
+    expect(aiCalls).toHaveLength(1);
+    const payload = JSON.parse(aiCalls[0]?.body ?? "{}") as { model: string; messages: Array<{ role: string; content: string }> };
+    expect(payload.model).toBe("deepseek-chat");
+    expect(payload.messages.at(-1)?.content).toBe(TEXT);
+    expect(aiCalls[0]?.headers.get("authorization")).toBe("Bearer deepseek-test-key");
+    const sent = mock.calls.find((call) => call.url.pathname === "/ilink/bot/sendmessage");
+    expect(sent?.body).toContain("DeepSeek test reply");
     expect(logs.join("\n")).not.toContain(TEXT);
     expect(logs.join("\n")).not.toContain("ctx-1");
     const update = mock.calls.find((call) => call.url.pathname === "/ilink/bot/getupdates");
@@ -80,14 +73,8 @@ describe("poll step", () => {
     expect(cursors).toEqual(["", "c1"]);
   });
 
-  it("ignores unknown senders, pins the first sender, and keeps polling after a bad webhook", async () => {
-    const mock = mockFetch((request) => {
-      if (request.url.hostname === "routine.example") {
-        const body = JSON.parse(request.body) as { message_id: string };
-        if (body.message_id === "1") return { status: 500, body: "" };
-        return { status: 200, body: "" };
-      }
-      return answer(request, () => ({
+  it("fails closed when the QR scanner ID is unavailable", async () => {
+    const mock = mockFetch((request) => answer(request, () => ({
         ret: 0,
         get_updates_buf: "c-next",
         msgs: [
@@ -107,10 +94,10 @@ describe("poll step", () => {
     const outcome = await runPollStep(app);
     expect(outcome.schedule).toBe(true);
     expect(await app.storage.get(KEYS.cursor)).toBe("c-next");
-    expect(await readAllowlist(app.storage)).toEqual(["owner@im.wechat"]);
+    expect(await readAllowlist(app.storage)).toEqual([]);
     expect((await readContextTokens(app.storage))["stranger@im.wechat"]).toBeUndefined();
-    const hooks = mock.calls.filter((call) => call.url.hostname === "routine.example");
-    expect(hooks.map((call) => (JSON.parse(call.body) as { message_id: string }).message_id)).toEqual(["1"]);
+    const aiCalls = mock.calls.filter((call) => call.url.hostname === "api.deepseek.com");
+    expect(aiCalls).toHaveLength(0);
   });
 
   it("uses a voice transcript and records media without downloading it", async () => {
@@ -134,21 +121,9 @@ describe("poll step", () => {
     const app = makeApp(mock.fetchImpl, { allowFrom: ["owner@im.wechat"], sendTyping: true });
     await seed(app);
     await runPollStep(app);
-    const hook = mock.calls.find((call) => call.url.hostname === "routine.example");
-    const event = JSON.parse(hook?.body ?? "{}") as {
-      type: string;
-      text: string;
-      media: Array<{ kind: string; transcript: string; has_cdn_reference: boolean; error: string | null; url: string | null }>;
-    };
-    expect(event.type).toBe("voice");
-    expect(event.text).toBe("transcribed");
-    expect(event.media[0]).toMatchObject({
-      kind: "voice",
-      transcript: "transcribed",
-      has_cdn_reference: true,
-      error: "no_key",
-      url: null,
-    });
+    const aiCall = mock.calls.find((call) => call.url.hostname === "api.deepseek.com");
+    const payload = JSON.parse(aiCall?.body ?? "{}") as { messages: Array<{ role: string; content: string }> };
+    expect(payload.messages.at(-1)?.content).toContain("transcribed");
     expect(mock.calls.some((call) => call.url.pathname.includes("download"))).toBe(false);
     expect(mock.calls.some((call) => call.url.pathname === "/ilink/bot/getconfig")).toBe(true);
     expect(mock.calls.some((call) => call.url.pathname === "/ilink/bot/sendtyping")).toBe(true);
@@ -161,7 +136,7 @@ describe("poll step", () => {
     const outcome = await runPollStep(app);
     expect(outcome.nextDelayMs).toBe(60 * 60 * 1000);
     expect(await app.storage.get(KEYS.cursor)).toBeNull();
-    expect(mock.calls.some((call) => call.url.hostname === "routine.example")).toBe(false);
+    expect(mock.calls.some((call) => call.url.hostname === "api.deepseek.com")).toBe(false);
   });
 });
 
@@ -226,12 +201,13 @@ function answer(
   request: CapturedRequest,
   updates: () => Record<string, unknown>,
 ): { status: number; body: string } {
-  if (request.url.hostname === "routine.example") return { status: 200, body: "" };
+  if (request.url.hostname === "api.deepseek.com") return { status: 200, body: JSON.stringify({ choices: [{ message: { content: "DeepSeek test reply" } }] }) };
   if (request.url.pathname === "/ilink/bot/msg/notifystart") return { status: 200, body: JSON.stringify({ ret: 0 }) };
   if (request.url.pathname === "/ilink/bot/getupdates") return { status: 200, body: JSON.stringify(updates()) };
   if (request.url.pathname === "/ilink/bot/getconfig") {
     return { status: 200, body: JSON.stringify({ ret: 0, typing_ticket: "ticket" }) };
   }
   if (request.url.pathname === "/ilink/bot/sendtyping") return { status: 200, body: "" };
+  if (request.url.pathname === "/ilink/bot/sendmessage") return { status: 200, body: JSON.stringify({ ret: 0, message_id: "out-1" }) };
   return { status: 404, body: "" };
 }
