@@ -1,7 +1,7 @@
 import type { BridgeApp } from "./app.js";
 import type { InboundEvent } from "./types.js";
 import { appFetch } from "./app.js";
-import { logWarn, publicError } from "./log.js";
+import { logInfo, logWarn, publicError } from "./log.js";
 import { sendBridgeText } from "./send.js";
 
 const SYSTEM_PROMPT = "你是一个通过微信与用户交流的中文 AI 助手。请用自然、清晰、简洁的中文回答。遇到不确定的信息要明确说明，不要编造。";
@@ -12,6 +12,7 @@ type ChatCompletionResponse = {
 };
 
 type ResponsesApiResponse = {
+  id?: string;
   output_text?: string;
   output?: Array<{
     type?: string;
@@ -61,6 +62,10 @@ export async function replyWithAI(app: BridgeApp, event: InboundEvent): Promise<
     if (isResponses && app.config.zhongdiwaActorAuthorization) {
       headers.set("x-openai-actor-authorization", app.config.zhongdiwaActorAuthorization);
     }
+    // A non-secret correlation ID lets the provider support team locate this request.
+    // It contains no user or message information.
+    const clientRequestId = isResponses ? crypto.randomUUID() : "";
+    if (clientRequestId) headers.set("X-Client-Request-Id", clientRequestId);
     const body = isResponses
       ? {
           model: aiModel,
@@ -80,6 +85,24 @@ export async function replyWithAI(app: BridgeApp, event: InboundEvent): Promise<
           stream: false,
         };
 
+    if (isResponses) {
+      logInfo("ai_responses_request", {
+        provider: new URL(aiApiBase).hostname,
+        endpoint: new URL(endpoint).pathname,
+        model: aiModel,
+        client_request_id: clientRequestId,
+        method: "POST",
+        auth_scheme: "Bearer",
+        actor_authorization_present: headers.has("x-openai-actor-authorization"),
+        content_type: headers.get("content-type"),
+        input_items: messages.length - 1,
+        input_roles: messages.slice(1).map((item) => item.role).join(","),
+        input_content_type: "input_text",
+        store: false,
+        max_output_tokens: 1_200,
+      });
+    }
+
     stage = "provider_fetch";
     const response = await appFetch(app)(endpoint, {
       method: "POST",
@@ -89,6 +112,16 @@ export async function replyWithAI(app: BridgeApp, event: InboundEvent): Promise<
 
     stage = "provider_read_response";
     const responseText = await response.text();
+    const responseDiagnostics = providerResponseDiagnostics(response);
+    if (isResponses) {
+      const logResult = response.ok ? logInfo : logWarn;
+      logResult("ai_responses_http_result", {
+        provider: new URL(aiApiBase).hostname,
+        model: aiModel,
+        client_request_id: clientRequestId,
+        ...responseDiagnostics,
+      });
+    }
     let data: ChatCompletionResponse & ResponsesApiResponse;
     try {
       data = responseText ? JSON.parse(responseText) as ChatCompletionResponse & ResponsesApiResponse : {};
@@ -102,6 +135,7 @@ export async function replyWithAI(app: BridgeApp, event: InboundEvent): Promise<
         provider: new URL(aiApiBase).hostname,
         code: data.error?.code ?? null,
         message: data.error?.message?.slice(0, 300) ?? "unknown",
+        ...(isResponses ? { client_request_id: clientRequestId } : {}),
       });
       stage = "provider_rejected_notice";
       const notice = await sendBridgeText(app, {
@@ -145,6 +179,21 @@ export async function replyWithAI(app: BridgeApp, event: InboundEvent): Promise<
     if (!notice.ok) logWarn("ai_failure_notice_delivery_failed", { message_id: event.message_id, error: notice.error });
     return false;
   }
+}
+
+/** Log only allowlisted response headers; never dump arbitrary upstream headers. */
+function providerResponseDiagnostics(response: Response): Record<string, string | number | null> {
+  return {
+    http_status: response.status,
+    upstream_request_id:
+      response.headers.get("x-request-id") ??
+      response.headers.get("openai-request-id") ??
+      response.headers.get("request-id"),
+    cf_ray: response.headers.get("cf-ray"),
+    retry_after: response.headers.get("retry-after"),
+    server: response.headers.get("server"),
+    content_type: response.headers.get("content-type"),
+  };
 }
 
 function extractResponsesText(data: ResponsesApiResponse): string {
