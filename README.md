@@ -9,10 +9,10 @@
 - 将当前消息和近期对话历史发送到 OpenAI Chat Completions 兼容 API。
 - 通过 `/model` 动态读取自定义 API 的 `/models` 列表，并用 `/model <模型ID>` 切换模型。
 - `/model deepseek` 切换到 DeepSeek 官方 API；`/model custom` 恢复 Cloudflare 默认自定义模型。
-- 将 DeepSeek 回复发回微信。
+- 将所选模型的回复发回微信。
 - 只处理白名单中的私聊发送者；群聊和机器人自身消息会被忽略。
 - 对话历史默认最多 30 轮、约 12000 字、24 小时；发送 `/new` 或 `/reset` 清空历史。
-- 微信语音使用微信提供的转写文本。当前 DeepSeek 接入不会把图片作为视觉输入识别。
+- 微信语音使用微信提供的转写文本。当前文字模型接入不会把图片作为视觉输入识别。
 
 ## Cloudflare 部署（适合 iPhone Safari）
 
