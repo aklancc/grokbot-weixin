@@ -54,10 +54,9 @@ export function testConfig(overrides: Partial<BridgeConfig> = {}): BridgeConfig 
     ...configFromEnv({
       BRIDGE_TOKEN: "test-token",
       BRIDGE_PUBLIC_URL: "https://bridge.example",
-      GROK_WEBHOOK_URL: "https://routine.example/hook",
-      GROK_WEBHOOK_KEY: "whsec",
+      DEEPSEEK_API_KEY: "deepseek-test-key",
       ILINK_CHANNEL_VERSION: "0.1.0",
-      ILINK_BOT_AGENT: "GrokBotWeixin/0.1.0",
+      ILINK_BOT_AGENT: "WeixinDeepSeek/0.1.0",
       SEND_TYPING: "false",
     }),
     ...overrides,
