@@ -53,3 +53,26 @@ tag = "v2"
   [[migrations.renamed_classes]]
   from = "AccountDurableObject"
   to = "AccountDurableObjectV2"
+
+# Preview deployment configuration for pull requests and branch previews.
+# Cloudflare Previews provision a new, isolated Durable Object namespace and storage
+# for each preview deployment. Top-level migrations and classes stay at the top level.
+[previews.vars]
+ILINK_API_BASE = "https://ilinkai.weixin.qq.com"
+ILINK_CDN_BASE = "https://novac2c.cdn.weixin.qq.com/c2c"
+ILINK_BOT_TYPE = "3"
+ILINK_APP_ID = "bot"
+ILINK_CHANNEL_VERSION = "0.1.0"
+ILINK_BOT_AGENT = "WeixinDeepSeek/0.1.0"
+WEIXIN_PIN_FIRST_SENDER = "true"
+SEND_TYPING = "true"
+LONG_POLL_TIMEOUT_MS = "35000"
+WEBHOOK_MAX_ATTEMPTS = "4"
+RATE_LIMIT_SEND_PER_MINUTE = "30"
+ZHONGDIWA_API_BASE = "https://www.zhongdiwa.com/v1"
+ZHONGDIWA_MODEL = "gpt-5.5"
+ZHONGDIWA_ACTOR_AUTHORIZATION = "local-image-extension"
+
+[[previews.durable_objects.bindings]]
+name = "ACCOUNT"
+class_name = "AccountDurableObjectV2"
